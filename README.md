@@ -1,6 +1,48 @@
-# Penpot MCP Server Setup
+# HTA Tool - Hierarchical Task Analysis Editor & Viewer
 
-This project is configured to use the Penpot MCP (Model Context Protocol) server, which allows AI tools like Cursor to interact with your Penpot designs.
+This project contains tools for creating and visualizing Hierarchical Task Analysis (HTA) diagrams, along with Penpot MCP (Model Context Protocol) server integration for design interaction.
+
+## Tools Included
+
+### 1. HTA Editor (`hta-editor.html`)
+An interactive web-based editor for creating and managing hierarchical task analysis diagrams with:
+- Text-based input with tab indentation (press Tab to indent)
+- Real-time visual hierarchy rendering with orthogonal connectors
+- Undo/Redo support (Ctrl+Z / Ctrl+Y)
+- Line selection with Shift+Arrow Up/Down
+- Tab/Shift+Tab for indentation control of selected lines
+- Auto-update hierarchy 3 seconds after typing stops
+- Click tasks to highlight corresponding text in the editor
+- Scrollable view for large hierarchies
+- Export-ready visualization
+
+### 2. HTA Viewer (`hierarchical-task-viewer.html`)
+A simple viewer for displaying HTA diagrams from text input.
+
+## Getting Started with HTA Tools
+
+Simply open `hta-editor.html` in your web browser. No installation required!
+
+1. Open `hta-editor.html` in any modern browser
+2. Enter your task hierarchy in the text panel using tabs for indentation
+3. The diagram updates automatically after 3 seconds
+4. Click on any task in the diagram to jump to its text
+
+### Example Format
+
+```
+Root Task
+	Subtask 1
+		Sub-subtask 1.1
+		Sub-subtask 1.2
+	Subtask 2
+```
+
+---
+
+## Penpot MCP Server Setup
+
+This project is also configured to use the Penpot MCP server, which allows AI tools like Cursor to interact with your Penpot designs.
 
 ## Setup Instructions
 
@@ -27,7 +69,7 @@ pip install penpot-mcp
 
 1. Copy the example environment file:
    ```bash
-   cp .env.example .env
+   cp env.template .env
    ```
 
 2. Edit `.env` and add your actual Penpot credentials:
@@ -37,27 +79,34 @@ pip install penpot-mcp
    PENPOT_PASSWORD=your_actual_password
    ```
 
-#### Option B: Configure in Cursor Settings
+#### Option B: Using MCP Configuration File
+
+1. Copy the template configuration:
+   ```bash
+   cp mcp-config.template.json mcp-config.json
+   ```
+
+2. Edit `mcp-config.json` and add your Penpot token:
+   ```json
+   {
+     "mcpServers": {
+       "penpot": {
+         "command": "uvx",
+         "args": ["penpot-mcp"],
+         "env": {
+           "PENPOT_API_URL": "https://design.penpot.app/api",
+           "PENPOT_TOKEN": "your_actual_penpot_token_here"
+         }
+       }
+     }
+   }
+   ```
+
+#### Option C: Configure in Cursor Settings
 
 1. Open Cursor Settings
 2. Navigate to MCP Servers configuration
-3. Add the following configuration (or use the provided `mcp-config.json` as reference):
-
-```json
-{
-  "mcpServers": {
-    "penpot": {
-      "command": "uvx",
-      "args": ["penpot-mcp"],
-      "env": {
-        "PENPOT_API_URL": "https://design.penpot.app/api",
-        "PENPOT_USERNAME": "your_penpot_username",
-        "PENPOT_PASSWORD": "your_penpot_password"
-      }
-    }
-  }
-}
-```
+3. Add the configuration manually in Cursor's settings
 
 ### 3. Restart Cursor
 
@@ -80,7 +129,14 @@ If you don't have a Penpot account yet:
 
 ## Security Note
 
-⚠️ **Never commit your `.env` file to version control!** The `.gitignore` file is configured to exclude it.
+⚠️ **IMPORTANT: Protect Your Credentials!**
+
+Never commit sensitive files to version control:
+- `.env` - Contains your credentials and tokens
+- `mcp-config.json` - Contains your Penpot token
+- Any other files with passwords or API keys
+
+The `.gitignore` file is configured to exclude these files automatically. Only the template files (`env.template` and `mcp-config.template.json`) are tracked in git - these are safe to share as they don't contain actual credentials.
 
 ## Resources
 
