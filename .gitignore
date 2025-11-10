@@ -2,6 +2,10 @@
 .env
 .env~
 *.env~
+.env.local
+
+# Configuration files with secrets
+mcp-config.json
 
 # Temporary files
 mcp-resource-*.txt
