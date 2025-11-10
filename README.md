@@ -34,6 +34,13 @@ Root Task
 	Subtask 2
 ```
 
+### Penpot Design File
+
+The repository includes `HTA.penpot` - a Penpot design file with an example HTA diagram. You can:
+- Open it in [Penpot](https://penpot.app) to view and edit the design
+- Use it as a template for creating professional HTA diagrams
+- Collaborate with others on HTA designs
+
 ---
 
 ## Penpot MCP Server Setup
