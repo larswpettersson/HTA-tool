@@ -2,9 +2,8 @@
 
 This project contains tools for creating and visualizing Hierarchical Task Analysis (HTA) diagrams, along with Penpot MCP (Model Context Protocol) server integration for design interaction.
 
-## Tools Included
+## HTA Editor (`hta-editor.html`)
 
-### 1. HTA Editor (`hta-editor.html`)
 An interactive web-based editor for creating and managing hierarchical task analysis diagrams with:
 - Text-based input with tab indentation (press Tab to indent)
 - Real-time visual hierarchy rendering with orthogonal connectors
@@ -15,9 +14,6 @@ An interactive web-based editor for creating and managing hierarchical task anal
 - Click tasks to highlight corresponding text in the editor
 - Scrollable view for large hierarchies
 - Export-ready visualization
-
-### 2. HTA Viewer (`hierarchical-task-viewer.html`)
-A simple viewer for displaying HTA diagrams from text input.
 
 ## Getting Started with HTA Tools
 
