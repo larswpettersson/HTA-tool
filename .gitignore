@@ -10,26 +10,18 @@ mcp-config.json
 # Temporary files
 mcp-resource-*.txt
 
+# Penpot MCP folder (entire directory)
+penpot-mcp/
+
 # Node modules
 node_modules/
-penpot-mcp/node_modules/
-penpot-mcp/common/node_modules/
-penpot-mcp/mcp-server/node_modules/
-penpot-mcp/penpot-plugin/node_modules/
 
 # Build artifacts
 dist/
 *.tsbuildinfo
-penpot-mcp/common/dist/
-penpot-mcp/mcp-server/dist/
-penpot-mcp/penpot-plugin/dist/
 
 # Lock files (optional - uncomment if you want to ignore)
 # package-lock.json
-# penpot-mcp/package-lock.json
-# penpot-mcp/common/package-lock.json
-# penpot-mcp/mcp-server/package-lock.json
-# penpot-mcp/penpot-plugin/package-lock.json
 
 # OS files
 .DS_Store
