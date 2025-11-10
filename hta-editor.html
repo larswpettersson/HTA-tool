@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTA Editor - Hierarchical Task Analysis</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 20px 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        h1 {
+            color: #202122;
+            font-size: 24px;
+            font-weight: 400;
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .help-text {
+            font-size: 12px;
+            color: #666;
+            background: #f0f0f0;
+            padding: 8px 12px;
+            border-radius: 4px;
+        }
+
+        .main-content {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+        }
+
+        .text-input-panel {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            width: 350px;
+            flex-shrink: 0;
+        }
+
+        .text-input-panel h2 {
+            font-size: 16px;
+            font-weight: 500;
+            color: #202122;
+            margin-bottom: 10px;
+        }
+
+        .text-input-panel textarea {
+            width: 100%;
+            min-height: 400px;
+            font-family: 'Roboto Mono', 'Courier New', monospace;
+            font-size: 13px;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            resize: vertical;
+            line-height: 1.6;
+            outline: none;
+            tab-size: 3;
+            -moz-tab-size: 3;
+        }
+
+        .text-input-panel textarea:focus {
+            border-color: #4a90e2;
+        }
+
+        .text-input-panel button {
+            width: 100%;
+            padding: 10px;
+            background: #4a90e2;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: background 0.2s;
+        }
+
+        .text-input-panel button:hover {
+            background: #357abd;
+        }
+
+        .text-input-panel .instructions {
+            font-size: 11px;
+            color: #666;
+            margin-top: 8px;
+            line-height: 1.4;
+        }
+
+        .hierarchy-container {
+            flex: 1;
+            min-width: 0;
+            overflow: auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            max-height: calc(100vh - 140px);
+        }
+
+        .hierarchy {
+            padding: 60px;
+            min-height: 600px;
+            min-width: fit-content;
+            position: relative;
+        }
+
+        /* Task Component Styles */
+        .task {
+            position: relative;
+            display: inline-block;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            user-select: none;
+            padding: 5px;
+            margin: -5px;
+        }
+
+        .task-main {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .task-id {
+            font-size: 10px;
+            font-weight: 400;
+            font-family: 'Roboto', sans-serif;
+            color: #000000;
+            padding: 2px 4px;
+            min-height: 14px;
+            line-height: 12px;
+            border: 1px solid transparent;
+            border-radius: 2px;
+            outline: none;
+            background: transparent;
+            cursor: default;
+            user-select: none;
+        }
+
+        .task-id:empty:before {
+            content: '<ID>';
+            color: #999;
+        }
+
+        .task-box {
+            background: #b1b2b5;
+            border: 1px solid #000000;
+            border-radius: 2px;
+            padding: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 33px;
+            min-width: 80px;
+        }
+
+        .task-title {
+            font-size: 14px;
+            font-weight: 400;
+            font-family: 'Roboto', sans-serif;
+            color: #202122;
+            text-align: center;
+            padding: 2px;
+            border: 1px solid transparent;
+            border-radius: 2px;
+            outline: none;
+            background: transparent;
+            cursor: default;
+            max-width: 300px;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+            overflow-wrap: break-word;
+            user-select: none;
+        }
+
+        .task-title:empty:before {
+            content: 'Task Title';
+            color: rgba(0, 0, 0, 0.3);
+        }
+
+        /* Task States */
+        .task.selected .task-box {
+            background: #828384;
+            box-shadow: 0 0 0 2px #4a90e2;
+        }
+
+        .task:hover:not(.selected) .task-box {
+            box-shadow: 4px 4px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Connector Lines */
+        .connectors {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .connector-line {
+            stroke: #000000;
+            stroke-width: 1;
+            fill: none;
+        }
+
+        /* Layout */
+        .node-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 40px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .node {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 40px;
+        }
+
+        .node-children {
+            display: flex;
+            gap: 30px;
+            align-items: flex-start;
+            justify-content: center;
+        }
+
+        /* Status message */
+        .status-message {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #202122;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 4px;
+            font-size: 13px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 1000;
+            pointer-events: none;
+        }
+
+        .status-message.show {
+            opacity: 1;
+        }
+
+        .status-message.error {
+            background: #d32f2f;
+        }
+
+        .status-message.success {
+            background: #388e3c;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>HTA Editor - Hierarchical Task Analysis</h1>
+            <div class="toolbar">
+            </div>
+        </div>
+        <div class="main-content">
+            <div class="text-input-panel">
+                <h2>Text Input</h2>
+                <textarea id="textInput" placeholder="Enter hierarchy using tabs for indentation...">Read File
+	Read Header
+		Read File Version
+		Read Meta Data
+	Read Body</textarea>
+                <div class="instructions">
+                    Use tabs for indentation. Each level of indentation represents a child task. Hierarchy updates automatically after 3 seconds of inactivity.
+                </div>
+            </div>
+            <div class="hierarchy-container">
+                <div class="hierarchy" id="hierarchy">
+                    <svg class="connectors" id="connectors"></svg>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="status-message" id="statusMessage"></div>
+
+    <script>
+        // Data model
+        let hierarchyData = {
+            id: "1",
+            title: "Read File",
+            level: 0,
+            children: [
+                {
+                    id: "1.1",
+                    title: "Read Header",
+                    level: 1,
+                    children: [
+                        { id: "1.1.1", title: "Read File Version", level: 2, children: [] },
+                        { id: "1.1.2", title: "Read Meta Data", level: 2, children: [] }
+                    ]
+                },
+                {
+                    id: "1.2",
+                    title: "Read Body",
+                    level: 1,
+                    children: []
+                }
+            ]
+        };
+
+        // State management
+        let selectedTask = null;
+        let taskElements = new Map();
+
+        // Utility functions
+        function showStatus(message, type = 'info') {
+            const statusEl = document.getElementById('statusMessage');
+            statusEl.textContent = message;
+            statusEl.className = `status-message show ${type}`;
+            setTimeout(() => {
+                statusEl.className = 'status-message';
+            }, 2000);
+        }
+
+        function wrapText(text, maxChars = 40) {
+            if (!text || text.length <= maxChars) return text;
+            const words = text.split(' ');
+            const lines = [];
+            let currentLine = '';
+
+            words.forEach(word => {
+                if ((currentLine + word).length <= maxChars) {
+                    currentLine += (currentLine ? ' ' : '') + word;
+                } else {
+                    if (currentLine) lines.push(currentLine);
+                    currentLine = word;
+                }
+            });
+            if (currentLine) lines.push(currentLine);
+            return lines.join('\n');
+        }
+
+        function findTask(node, id) {
+            if (node.id === id) return node;
+            if (node.children) {
+                for (let child of node.children) {
+                    const found = findTask(child, id);
+                    if (found) return found;
+                }
+            }
+            return null;
+        }
+
+        // Task operations removed - editing only via text input
+
+        // Task selection
+        function selectTask(taskId) {
+            // Deselect all
+            document.querySelectorAll('.task').forEach(el => el.classList.remove('selected'));
+            
+            selectedTask = taskId;
+            const taskEl = taskElements.get(taskId);
+            if (taskEl) {
+                taskEl.classList.add('selected');
+            }
+            
+            // Select corresponding text in textarea
+            selectTextInTextarea(taskId);
+        }
+
+        // Find and select the corresponding text in textarea
+        function selectTextInTextarea(taskId) {
+            const task = findTask(hierarchyData, taskId);
+            if (!task) return;
+            
+            const textInput = document.getElementById('textInput');
+            const text = textInput.value;
+            const lines = text.split('\n');
+            
+            // Build a map of task positions to help match correctly
+            function buildTaskMap(node, lineIndex) {
+                const results = [];
+                
+                // Find this task in the lines
+                for (let i = lineIndex; i < lines.length; i++) {
+                    const line = lines[i];
+                    const trimmedLine = line.trim();
+                    const indent = line.search(/\S/);
+                    
+                    if (trimmedLine === node.title) {
+                        results.push({ node, lineIndex: i, line });
+                        
+                        // Process children
+                        if (node.children && node.children.length > 0) {
+                            let childIndex = i + 1;
+                            for (const child of node.children) {
+                                const childResults = buildTaskMap(child, childIndex);
+                                if (childResults.length > 0) {
+                                    results.push(...childResults);
+                                    childIndex = childResults[childResults.length - 1].lineIndex + 1;
+                                }
+                            }
+                        }
+                        break;
+                    }
+                }
+                
+                return results;
+            }
+            
+            const taskMap = buildTaskMap(hierarchyData, 0);
+            
+            // Find the matching task
+            const match = taskMap.find(item => item.node.id === taskId);
+            
+            if (match) {
+                const i = match.lineIndex;
+                const line = match.line;
+                
+                // Calculate the start and end positions
+                const startPos = lines.slice(0, i).join('\n').length + (i > 0 ? 1 : 0);
+                const endPos = startPos + line.length;
+                
+                // Select the text including leading tabs/spaces
+                textInput.focus();
+                textInput.setSelectionRange(startPos, endPos);
+                
+                // Scroll to the selected text
+                const lineHeight = parseInt(window.getComputedStyle(textInput).lineHeight);
+                const scrollTop = i * lineHeight - textInput.clientHeight / 2;
+                textInput.scrollTop = Math.max(0, scrollTop);
+            }
+        }
+
+        // Create task element
+        function createTaskElement(task) {
+            const taskDiv = document.createElement('div');
+            taskDiv.className = 'task';
+            taskDiv.dataset.taskId = task.id;
+
+            const taskMain = document.createElement('div');
+            taskMain.className = 'task-main';
+
+            // ID field
+            const taskId = document.createElement('div');
+            taskId.className = 'task-id';
+            taskId.contentEditable = false;
+            taskId.textContent = task.id;
+            taskId.dataset.field = 'id';
+
+            // Task box with title
+            const taskBox = document.createElement('div');
+            taskBox.className = 'task-box';
+
+            const taskTitle = document.createElement('div');
+            taskTitle.className = 'task-title';
+            taskTitle.contentEditable = false;
+            taskTitle.textContent = wrapText(task.title);
+            taskTitle.dataset.field = 'title';
+
+            taskBox.appendChild(taskTitle);
+            taskMain.appendChild(taskId);
+            taskMain.appendChild(taskBox);
+            taskDiv.appendChild(taskMain);
+
+            // Click on entire task to select
+            taskDiv.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectTask(task.id);
+            });
+
+            taskElements.set(task.id, taskDiv);
+            return taskDiv;
+        }
+
+        // Draw connectors (orthogonal)
+        function drawConnectors() {
+            const svg = document.getElementById('connectors');
+            svg.innerHTML = '';
+            
+            const hierarchyRect = document.getElementById('hierarchy').getBoundingClientRect();
+
+            taskElements.forEach((parentEl, parentId) => {
+                const parentTask = findTask(hierarchyData, parentId);
+                if (!parentTask || !parentTask.children || parentTask.children.length === 0) return;
+
+                const parentBox = parentEl.querySelector('.task-box').getBoundingClientRect();
+                const parentCenterX = parentBox.left + parentBox.width / 2 - hierarchyRect.left;
+                const parentBottom = parentBox.bottom - hierarchyRect.top;
+
+                parentTask.children.forEach(child => {
+                    const childEl = taskElements.get(child.id);
+                    if (!childEl) return;
+
+                    const childBox = childEl.querySelector('.task-box').getBoundingClientRect();
+                    const childCenterX = childBox.left + childBox.width / 2 - hierarchyRect.left;
+                    const childTop = childBox.top - hierarchyRect.top;
+
+                    // Create orthogonal connector (vertical down, horizontal, vertical up)
+                    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    
+                    // Calculate midpoint for the horizontal line
+                    const midY = parentBottom + (childTop - parentBottom) / 2;
+                    
+                    // Draw: vertical down from parent, horizontal across, vertical down to child
+                    const d = `M ${parentCenterX} ${parentBottom} L ${parentCenterX} ${midY} L ${childCenterX} ${midY} L ${childCenterX} ${childTop}`;
+                    
+                    path.setAttribute('d', d);
+                    path.setAttribute('class', 'connector-line');
+                    svg.appendChild(path);
+                });
+            });
+        }
+
+        // Render hierarchy
+        function render() {
+            taskElements.clear();
+            const hierarchy = document.getElementById('hierarchy');
+            const svg = document.getElementById('connectors');
+            
+            // Clear except SVG
+            Array.from(hierarchy.children).forEach(child => {
+                if (child.id !== 'connectors') child.remove();
+            });
+
+            function renderNode(node, container) {
+                const nodeGroup = document.createElement('div');
+                nodeGroup.className = 'node-group';
+
+                const nodeDiv = document.createElement('div');
+                nodeDiv.className = 'node';
+
+                const taskEl = createTaskElement(node);
+                nodeDiv.appendChild(taskEl);
+
+                if (node.children && node.children.length > 0) {
+                    const childrenDiv = document.createElement('div');
+                    childrenDiv.className = 'node-children';
+
+                    node.children.forEach(child => {
+                        const childContainer = document.createElement('div');
+                        renderNode(child, childContainer);
+                        childrenDiv.appendChild(childContainer);
+                    });
+
+                    nodeGroup.appendChild(nodeDiv);
+                    nodeGroup.appendChild(childrenDiv);
+                } else {
+                    nodeGroup.appendChild(nodeDiv);
+                }
+
+                container.appendChild(nodeGroup);
+            }
+
+            renderNode(hierarchyData, hierarchy);
+
+            // Draw connectors after render
+            setTimeout(drawConnectors, 50);
+
+            // Restore selection
+            if (selectedTask) {
+                const taskEl = taskElements.get(selectedTask);
+                if (taskEl) {
+                    taskEl.classList.add('selected');
+                }
+            }
+        }
+
+        // Keyboard shortcuts removed - no longer needed
+
+        // Click on background to deselect
+        document.getElementById('hierarchy').addEventListener('click', (e) => {
+            // Only deselect if clicking on the hierarchy background itself
+            if (e.target.id === 'hierarchy' || e.target.id === 'connectors') {
+                if (selectedTask) {
+                    document.querySelectorAll('.task').forEach(el => el.classList.remove('selected'));
+                    selectedTask = null;
+                }
+            }
+        });
+
+        // Parse text input and create hierarchy
+        function loadFromText() {
+            const text = document.getElementById('textInput').value;
+            if (!text.trim()) {
+                showStatus('Please enter some text', 'error');
+                return;
+            }
+
+            try {
+                const lines = text.split('\n').filter(line => line.trim());
+                if (lines.length === 0) {
+                    showStatus('No valid tasks found', 'error');
+                    return;
+                }
+
+                // Parse hierarchy
+                const root = parseHierarchy(lines);
+                if (root) {
+                    hierarchyData = root;
+                    selectedTask = null;
+                    render();
+                    showStatus('Hierarchy loaded successfully', 'success');
+                } else {
+                    showStatus('Failed to parse hierarchy', 'error');
+                }
+            } catch (error) {
+                showStatus('Error parsing text: ' + error.message, 'error');
+            }
+        }
+
+        function parseHierarchy(lines) {
+            if (lines.length === 0) return null;
+
+            // Parse lines with their indentation levels
+            const items = lines.map(line => {
+                const indent = line.search(/\S/);
+                const title = line.trim();
+                return { indent, title };
+            });
+
+            // Build tree structure
+            let idCounter = 1;
+            const root = {
+                id: '1',
+                title: items[0].title,
+                level: 0,
+                children: []
+            };
+
+            const stack = [{ node: root, indent: items[0].indent }];
+
+            for (let i = 1; i < items.length; i++) {
+                const item = items[i];
+                
+                // Pop stack until we find the parent
+                while (stack.length > 1 && stack[stack.length - 1].indent >= item.indent) {
+                    stack.pop();
+                }
+
+                const parent = stack[stack.length - 1].node;
+                
+                // Generate ID based on parent
+                const childIndex = parent.children.length;
+                const newId = parent.id + '.' + (childIndex + 1);
+                
+                const newNode = {
+                    id: newId,
+                    title: item.title,
+                    level: parent.level + 1,
+                    children: []
+                };
+
+                parent.children.push(newNode);
+                stack.push({ node: newNode, indent: item.indent });
+            }
+
+            return root;
+        }
+
+        // Textarea enhanced functionality
+        const textInput = document.getElementById('textInput');
+        
+        // Undo/Redo history management
+        let history = [textInput.value];
+        let historyIndex = 0;
+        let isUndoRedo = false;
+        
+        // Anchor for line selection
+        let selectionAnchor = null;
+        let currentLinePosition = null;
+        
+        // Auto-update timer
+        let updateTimeout = null;
+        
+        function saveHistory() {
+            if (isUndoRedo) return;
+            
+            // Remove any future history if we're not at the end
+            history = history.slice(0, historyIndex + 1);
+            
+            // Add new state
+            history.push(textInput.value);
+            historyIndex++;
+            
+            // Limit history to 100 items
+            if (history.length > 100) {
+                history.shift();
+                historyIndex--;
+            }
+        }
+        
+        function undo() {
+            if (historyIndex > 0) {
+                isUndoRedo = true;
+                historyIndex--;
+                textInput.value = history[historyIndex];
+                isUndoRedo = false;
+                
+                // Trigger auto-update timer
+                if (updateTimeout) {
+                    clearTimeout(updateTimeout);
+                }
+                updateTimeout = setTimeout(() => {
+                    loadFromText();
+                }, 3000);
+            }
+        }
+        
+        function redo() {
+            if (historyIndex < history.length - 1) {
+                isUndoRedo = true;
+                historyIndex++;
+                textInput.value = history[historyIndex];
+                isUndoRedo = false;
+                
+                // Trigger auto-update timer
+                if (updateTimeout) {
+                    clearTimeout(updateTimeout);
+                }
+                updateTimeout = setTimeout(() => {
+                    loadFromText();
+                }, 3000);
+            }
+        }
+        
+        // Get line boundaries for selection
+        function getLineStart(text, pos) {
+            let start = pos;
+            while (start > 0 && text[start - 1] !== '\n') {
+                start--;
+            }
+            return start;
+        }
+        
+        function getLineEnd(text, pos) {
+            let end = pos;
+            while (end < text.length && text[end] !== '\n') {
+                end++;
+            }
+            return end;
+        }
+        
+        // Enhanced keyboard handling
+        textInput.addEventListener('keydown', (e) => {
+            const start = e.target.selectionStart;
+            const end = e.target.selectionEnd;
+            const value = e.target.value;
+            
+            // Undo/Redo
+            if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'z') {
+                e.preventDefault();
+                undo();
+                return;
+            }
+            
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) {
+                e.preventDefault();
+                redo();
+                return;
+            }
+            
+            // Shift+Arrow Up/Down to select complete lines
+            if (e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+                e.preventDefault();
+                
+                // Initialize anchor on first Shift+Arrow press
+                if (selectionAnchor === null) {
+                    const anchorLine = getLineStart(value, start);
+                    selectionAnchor = anchorLine;
+                    currentLinePosition = anchorLine;
+                }
+                
+                // Move current position up or down by one line
+                if (e.key === 'ArrowUp') {
+                    // Move up one line
+                    if (currentLinePosition > 0) {
+                        currentLinePosition = getLineStart(value, currentLinePosition - 1);
+                    }
+                } else { // ArrowDown
+                    // Move down one line
+                    const lineEnd = getLineEnd(value, currentLinePosition);
+                    if (lineEnd < value.length && value[lineEnd] === '\n') {
+                        currentLinePosition = lineEnd + 1;
+                    } else if (lineEnd < value.length) {
+                        currentLinePosition = lineEnd;
+                    }
+                }
+                
+                // Calculate selection from anchor to current position
+                let newStart, newEnd;
+                if (currentLinePosition < selectionAnchor) {
+                    // Selection goes upward from anchor
+                    newStart = currentLinePosition;
+                    newEnd = getLineEnd(value, selectionAnchor);
+                } else {
+                    // Selection goes downward from anchor (or same line)
+                    newStart = selectionAnchor;
+                    newEnd = getLineEnd(value, currentLinePosition);
+                }
+                
+                e.target.selectionStart = newStart;
+                e.target.selectionEnd = newEnd;
+                return;
+            } else {
+                // Reset anchor when not using Shift+Arrow
+                if (!e.shiftKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) {
+                    selectionAnchor = null;
+                    currentLinePosition = null;
+                }
+            }
+            
+            // Tab/Shift+Tab for indentation
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                
+                // Get the line boundaries even if no selection
+                const lineStart = getLineStart(value, start);
+                const lineEnd = getLineEnd(value, end);
+                
+                // Get the line(s) content
+                const selectedText = value.substring(lineStart, lineEnd);
+                const lines = selectedText.split('\n');
+                
+                let newText;
+                let offset;
+                
+                if (e.shiftKey) {
+                    // Shift+Tab: Remove one leading tab from each line
+                    newText = lines.map(line => {
+                        if (line.startsWith('\t')) {
+                            return line.substring(1);
+                        }
+                        return line;
+                    }).join('\n');
+                    offset = selectedText.length - newText.length;
+                } else {
+                    // Tab: Add one tab to each line
+                    newText = lines.map(line => '\t' + line).join('\n');
+                    offset = newText.length - selectedText.length;
+                }
+                
+                // Replace text
+                e.target.value = value.substring(0, lineStart) + newText + value.substring(lineEnd);
+                
+                // Maintain selection or cursor position
+                if (start === end) {
+                    // No selection - place cursor at end of the modified line
+                    const newCursorPos = e.shiftKey ? Math.max(lineStart, start - 1) : start + 1;
+                    e.target.selectionStart = e.target.selectionEnd = newCursorPos;
+                } else {
+                    // Selection exists - maintain selection
+                    e.target.selectionStart = lineStart;
+                    e.target.selectionEnd = e.shiftKey ? lineEnd - offset : lineEnd + offset;
+                }
+                
+                // Save to history
+                saveHistory();
+                
+                // Trigger auto-update timer
+                if (updateTimeout) {
+                    clearTimeout(updateTimeout);
+                }
+                updateTimeout = setTimeout(() => {
+                    loadFromText();
+                }, 3000);
+            }
+        });
+        
+        // Save history on input
+        textInput.addEventListener('input', () => {
+            saveHistory();
+        });
+        
+        // Reset anchor on mouse click or selection change outside of Shift+Arrow
+        textInput.addEventListener('mousedown', () => {
+            selectionAnchor = null;
+            currentLinePosition = null;
+        });
+        
+        textInput.addEventListener('click', () => {
+            selectionAnchor = null;
+            currentLinePosition = null;
+        });
+
+        // Auto-update hierarchy with 3-second debounce
+        textInput.addEventListener('input', () => {
+            // Clear existing timeout
+            if (updateTimeout) {
+                clearTimeout(updateTimeout);
+            }
+            
+            // Set new timeout for 3 seconds
+            updateTimeout = setTimeout(() => {
+                loadFromText();
+            }, 3000);
+        });
+
+        // Redraw connectors on window resize
+        let resizeTimeout = null;
+        window.addEventListener('resize', () => {
+            // Clear existing timeout
+            if (resizeTimeout) {
+                clearTimeout(resizeTimeout);
+            }
+            
+            // Debounce resize events - redraw after 100ms of no resize activity
+            resizeTimeout = setTimeout(() => {
+                drawConnectors();
+            }, 100);
+        });
+
+        // Initial render
+        render();
+    </script>
+</body>
+</html>
+

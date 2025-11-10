@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTA Hierarchical Task Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f5f5f5;
+            padding: 40px;
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            color: #202122;
+            margin-bottom: 40px;
+            font-size: 28px;
+            font-weight: 400;
+        }
+
+        .hierarchy {
+            background: white;
+            padding: 60px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            min-height: 500px;
+        }
+
+        /* Task Component Styles */
+        .task {
+            position: relative;
+            display: inline-block;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .task-main {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .task-id {
+            font-size: 10px;
+            font-weight: 400;
+            font-family: 'Roboto', sans-serif;
+            color: #000000;
+            padding: 0 2px;
+            height: 12px;
+            line-height: 12px;
+        }
+
+        .task-box {
+            background: #b1b2b5;
+            border: 1px solid #000000;
+            border-radius: 2px;
+            padding: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 33px;
+        }
+
+        .task-title {
+            font-size: 14px;
+            font-weight: 400;
+            font-family: 'Roboto', sans-serif;
+            color: #202122;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        /* Task Variants */
+        .task:hover .task-box {
+            box-shadow: 4px 4px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .task.selected .task-box {
+            background: #828384;
+        }
+
+        /* Level-based sizing */
+        .level-0 .task-box {
+            min-width: 280px;
+        }
+
+        .level-1 .task-box {
+            min-width: 160px;
+        }
+
+        .level-2 .task-box {
+            min-width: 120px;
+        }
+
+        /* Connector Lines */
+        .connector {
+            position: absolute;
+            pointer-events: none;
+        }
+
+        .connector path {
+            stroke: #000000;
+            stroke-width: 1;
+            fill: none;
+            stroke-opacity: 1;
+        }
+
+        /* Layout structures */
+        .node-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .node-row {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+            justify-content: center;
+        }
+
+        .node {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .node-children {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+        }
+
+        /* Visual feedback */
+        .task-info {
+            position: absolute;
+            background: #202122;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 1000;
+            white-space: nowrap;
+        }
+
+        .task:hover .task-info {
+            opacity: 1;
+        }
+
+        .task-info.top {
+            bottom: 100%;
+            margin-bottom: 8px;
+        }
+
+        .task-info.bottom {
+            top: 100%;
+            margin-top: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Hierarchical Task Analysis</h1>
+        <div class="hierarchy" id="hierarchy"></div>
+    </div>
+
+    <script>
+        // Sample data representing the hierarchy from the image
+        const hierarchyData = {
+            id: "0",
+            title: "USE OF AN IN-TRANSIT MIXER",
+            level: 0,
+            children: [
+                {
+                    id: "1",
+                    title: "TRANSIT",
+                    level: 1,
+                    children: [
+                        { id: "1.1", title: "ROAD TRANSIT", level: 2 },
+                        { id: "1.2", title: "ARRIVAL/DEPARTURE", level: 2 }
+                    ]
+                },
+                {
+                    id: "2",
+                    title: "PREPARATION",
+                    level: 1,
+                    children: [
+                        { id: "2.1", title: "GETTING INTO/OUT OF", level: 2 },
+                        { id: "2.2", title: "SETTING", level: 2 }
+                    ]
+                },
+                {
+                    id: "3",
+                    title: "DISCHARGE",
+                    level: 1,
+                    children: [
+                        { id: "3.1", title: "DIRECT", level: 2 },
+                        { id: "3.2", title: "INTO A PUMP", level: 2 },
+                        { id: "3.3", title: "INTO A BUCKET", level: 2 }
+                    ]
+                },
+                {
+                    id: "4",
+                    title: "FINAL OPERATIONS",
+                    level: 1,
+                    children: [
+                        { id: "4.1", title: "CLEANING", level: 2 },
+                        { id: "4.2", title: "SETTING", level: 2 }
+                    ]
+                }
+            ]
+        };
+
+        function createTaskComponent(task, level) {
+            const taskDiv = document.createElement('div');
+            taskDiv.className = `task level-${level}`;
+            taskDiv.dataset.taskId = task.id;
+
+            const taskMain = document.createElement('div');
+            taskMain.className = 'task-main';
+
+            const taskId = document.createElement('div');
+            taskId.className = 'task-id';
+            taskId.textContent = `<${task.id}>`;
+
+            const taskBox = document.createElement('div');
+            taskBox.className = 'task-box';
+
+            const taskTitle = document.createElement('div');
+            taskTitle.className = 'task-title';
+            taskTitle.textContent = task.title;
+
+            taskBox.appendChild(taskTitle);
+            taskMain.appendChild(taskId);
+            taskMain.appendChild(taskBox);
+            taskDiv.appendChild(taskMain);
+
+            // Add hover info tooltip
+            const info = document.createElement('div');
+            info.className = 'task-info top';
+            info.textContent = `Task: ${task.title}`;
+            taskDiv.appendChild(info);
+
+            // Add click handler for selection
+            taskDiv.addEventListener('click', function() {
+                document.querySelectorAll('.task').forEach(t => t.classList.remove('selected'));
+                taskDiv.classList.add('selected');
+            });
+
+            return taskDiv;
+        }
+
+        function createConnector(fromElement, toElement) {
+            // Get positions
+            const fromBox = fromElement.querySelector('.task-box').getBoundingClientRect();
+            const toBox = toElement.querySelector('.task-box').getBoundingClientRect();
+            const hierarchy = document.getElementById('hierarchy');
+            const hierarchyRect = hierarchy.getBoundingClientRect();
+
+            // Calculate relative positions
+            const fromBottom = fromElement.offsetTop + fromBox.bottom - fromBox.top;
+            const toTop = toElement.offsetTop;
+            
+            const fromCenter = fromElement.offsetLeft + fromBox.width / 2;
+            const toCenter = toElement.offsetLeft + toBox.width / 2;
+
+            // Create SVG connector
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.className = 'connector';
+            svg.style.position = 'absolute';
+            svg.style.left = '0';
+            svg.style.top = '0';
+            svg.style.width = '100%';
+            svg.style.height = '100%';
+            svg.style.overflow = 'visible';
+            svg.style.pointerEvents = 'none';
+
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            
+            // Create path connecting the two elements
+            const startY = fromBottom - hierarchy.offsetTop;
+            const endY = toTop - hierarchy.offsetTop;
+            
+            const pathData = `M ${fromCenter} ${startY} L ${toCenter} ${endY}`;
+            path.setAttribute('d', pathData);
+            path.setAttribute('stroke', '#000000');
+            path.setAttribute('stroke-width', '1');
+
+            svg.appendChild(path);
+            return svg;
+        }
+
+        function renderHierarchy(node, parentElement) {
+            if (!node) return;
+
+            const nodeGroup = document.createElement('div');
+            nodeGroup.className = 'node-group';
+
+            const currentNode = document.createElement('div');
+            currentNode.className = 'node';
+
+            const task = createTaskComponent(node, node.level);
+            currentNode.appendChild(task);
+
+            const svgContainer = document.createElement('div');
+            svgContainer.style.position = 'relative';
+            svgContainer.style.width = '100%';
+            svgContainer.style.height = '100%';
+
+            if (node.children && node.children.length > 0) {
+                const childrenRow = document.createElement('div');
+                childrenRow.className = 'node-children';
+
+                node.children.forEach((child, index) => {
+                    const childContainer = document.createElement('div');
+                    childContainer.className = 'node';
+                    renderHierarchy(child, childContainer);
+                    childrenRow.appendChild(childContainer);
+                });
+
+                nodeGroup.appendChild(currentNode);
+                nodeGroup.appendChild(childrenRow);
+
+                // Add connectors after rendering
+                setTimeout(() => {
+                    const childrenTasks = childrenRow.querySelectorAll('.task');
+                    childrenTasks.forEach(childTask => {
+                        const connector = createConnector(task, childTask);
+                        if (svgContainer.parentNode) {
+                            svgContainer.appendChild(connector);
+                        } else {
+                            currentNode.appendChild(connector);
+                        }
+                    });
+                }, 0);
+            } else {
+                nodeGroup.appendChild(currentNode);
+            }
+
+            if (parentElement) {
+                parentElement.appendChild(nodeGroup);
+            } else {
+                document.getElementById('hierarchy').appendChild(nodeGroup);
+            }
+        }
+
+        // Render the hierarchy
+        document.addEventListener('DOMContentLoaded', () => {
+            renderHierarchy(hierarchyData);
+        });
+
+        // Add some interactive enhancements
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.task')) {
+                document.querySelectorAll('.task').forEach(t => t.classList.remove('selected'));
+            }
+        });
+    </script>
+</body>
+</html>
+
+
