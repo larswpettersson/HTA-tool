@@ -2,27 +2,32 @@
 
 This project contains tools for creating and visualizing Hierarchical Task Analysis (HTA) diagrams, along with Penpot MCP (Model Context Protocol) server integration for design interaction.
 
-## HTA Editor (`hta-editor.html`)
+## HTA Editor (`hta-editor2.html`) — current
 
-An interactive web-based editor for creating and managing hierarchical task analysis diagrams with:
+State-driven editor (Bowtie-style): HTML shell + [`scripts/hta-editor-app.js`](scripts/hta-editor-app.js). The **task tree is the source of truth**; the text panel is a synced authoring view.
+
+Features:
 - Text-based input with tab indentation (press Tab to indent)
-- Real-time visual hierarchy rendering with orthogonal connectors
-- Undo/Redo support (Ctrl+Z / Ctrl+Y)
+- Visual hierarchy with orthogonal connectors (`commit` → `render` → connectors)
+- Undo/Redo (Ctrl/Cmd+Z / Ctrl/Cmd+Y)
 - Line selection with Shift+Arrow Up/Down
-- Tab/Shift+Tab for indentation control of selected lines
+- Tab/Shift+Tab for indentation of selected lines
 - Auto-update hierarchy 3 seconds after typing stops
-- Click tasks to highlight corresponding text in the editor
-- Scrollable view for large hierarchies
-- Export-ready visualization
+- Click tasks to select the matching text line by **stable task id**
+- Light/dark theme (L / D)
+- JSON **Export** / **Import** with validation (LLM-friendly error messages)
+- Offline smoke tests: `python3 scripts/hta-editor-smoke-test.py`
 
-## Getting Started with HTA Tools
+Legacy reference (DOM/text dual-store, unchanged): [`hta-editor.html`](hta-editor.html)
 
-Simply open `hta-editor.html` in your web browser. No installation required!
+## Getting Started
 
-1. Open `hta-editor.html` in any modern browser
-2. Enter your task hierarchy in the text panel using tabs for indentation
-3. The diagram updates automatically after 3 seconds
-4. Click on any task in the diagram to jump to its text
+Open `hta-editor2.html` in any modern browser — no build step.
+
+1. Enter your task hierarchy in the text panel using tabs for indentation
+2. The diagram updates automatically after 3 seconds (via `commit`)
+3. Click any task in the diagram to jump to its text line
+4. Use **Export** / **Import** for versioned JSON (`fixtures/hta-sample.json`)
 
 ### Example Format
 
@@ -33,6 +38,24 @@ Root Task
 		Sub-subtask 1.2
 	Subtask 2
 ```
+
+### JSON schema (import/export)
+
+```json
+{
+  "version": 1,
+  "meta": { "theme": "light" },
+  "root": {
+    "id": "1",
+    "title": "Root Task",
+    "children": [
+      { "id": "1.1", "title": "Child", "children": [] }
+    ]
+  }
+}
+```
+
+Import validation rejects non-object nodes and non-array `children` (see `fixtures/hta-broken.json`).
 
 ### Penpot Design File
 

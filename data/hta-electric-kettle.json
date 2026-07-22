@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "meta": {
+    "theme": "light"
+  },
+  "root": {
+    "id": "1",
+    "title": "Boil water in an electric kettle",
+    "level": 0,
+    "children": [
+      {
+        "id": "1.1",
+        "title": "Prepare and fill the kettle",
+        "level": 1,
+        "children": [
+          {
+            "id": "1.1.1",
+            "title": "Open the lid",
+            "level": 2,
+            "children": []
+          },
+          {
+            "id": "1.1.2",
+            "title": "Fill with water (between MIN and MAX levels)",
+            "level": 2,
+            "children": []
+          },
+          {
+            "id": "1.1.3",
+            "title": "Close the lid securely",
+            "level": 2,
+            "children": []
+          }
+        ]
+      },
+      {
+        "id": "1.2",
+        "title": "Place and connect",
+        "level": 1,
+        "children": [
+          {
+            "id": "1.2.1",
+            "title": "Place the kettle on the power base",
+            "level": 2,
+            "children": []
+          },
+          {
+            "id": "1.2.2",
+            "title": "Plug the power cord into the wall outlet",
+            "level": 2,
+            "children": []
+          }
+        ]
+      },
+      {
+        "id": "1.3",
+        "title": "Start heating",
+        "level": 1,
+        "children": [
+          {
+            "id": "1.3.1",
+            "title": "Press the power switch (ON)",
+            "level": 2,
+            "children": []
+          },
+          {
+            "id": "1.3.2",
+            "title": "Wait until the kettle turns off automatically",
+            "level": 2,
+            "children": []
+          }
+        ]
+      },
+      {
+        "id": "1.4",
+        "title": "Serve the water",
+        "level": 1,
+        "children": [
+          {
+            "id": "1.4.1",
+            "title": "Lift the kettle off the power base",
+            "level": 2,
+            "children": []
+          },
+          {
+            "id": "1.4.2",
+            "title": "Pour the boiling water into the desired container",
+            "level": 2,
+            "children": []
+          }
+        ]
+      }
+    ]
+  }
+}

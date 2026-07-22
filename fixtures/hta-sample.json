@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "meta": {
+    "theme": "light"
+  },
+  "root": {
+    "id": "1",
+    "title": "Read File",
+    "level": 0,
+    "children": [
+      {
+        "id": "1.1",
+        "title": "Read Header",
+        "level": 1,
+        "children": [
+          {
+            "id": "1.1.1",
+            "title": "Read File Version",
+            "level": 2,
+            "children": []
+          },
+          {
+            "id": "1.1.2",
+            "title": "Read Meta Data",
+            "level": 2,
+            "children": []
+          }
+        ]
+      },
+      {
+        "id": "1.2",
+        "title": "Read Body",
+        "level": 1,
+        "children": []
+      }
+    ]
+  }
+}

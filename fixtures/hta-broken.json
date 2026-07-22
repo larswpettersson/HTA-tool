@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "meta": {
+    "theme": "light"
+  },
+  "root": {
+    "id": "1",
+    "title": "Broken Root",
+    "children": "not-an-array"
+  }
+}

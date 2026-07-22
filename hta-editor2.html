@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HTA Editor — Hierarchical Task Analysis</title>
+  <!--
+    State-driven refactor of hta-editor.html — in-memory tree + render-from-state.
+    App logic: scripts/hta-editor-app.js
+    Typography: Source Sans 3 (HFA / Bowtie alignment).
+  -->
+  <style>
+    :root {
+      --color-background-base: #f0f6fc;
+      --color-background-sunken: #e6edf3;
+      --color-background-elevated: #ffffff;
+      --color-foreground: #0d1117;
+      --color-foreground-muted: #57606a;
+      --color-foreground-subtle: #8b949e;
+      --color-accent: #4a90e2;
+      --color-task-box: #b1b2b5;
+      --color-task-box-selected: #828384;
+      --font-sans: "Source Sans 3", "Source Sans Pro", system-ui,
+                   -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-mono: "Source Code Pro", "Roboto Mono", "Courier New", monospace;
+      --card-radius: 8px;
+      --interaction-shadow: color-mix(in srgb, var(--color-foreground) 40%, transparent);
+    }
+
+    body[data-theme="dark"] {
+      --color-background-base: #2d333b;
+      --color-background-sunken: #0d1117;
+      --color-background-elevated: #383d45;
+      --color-foreground: #fafbfc;
+      --color-foreground-muted: #c9d1d9;
+      --color-foreground-subtle: #9ca3af;
+      --color-accent: #78a8db;
+      --color-task-box: #4a4d52;
+      --color-task-box-selected: #5c6066;
+      --interaction-shadow: color-mix(in srgb, var(--color-foreground) 50%, transparent);
+      background: var(--color-background-sunken);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      font-family: var(--font-sans);
+      font-size: 16px;
+      line-height: 1.5;
+      color: var(--color-foreground);
+      background: var(--color-background-base);
+      padding: 20px;
+    }
+
+    .container { max-width: 1600px; margin: 0 auto; }
+
+    .header {
+      background: var(--color-background-elevated);
+      padding: 16px 24px;
+      border-radius: var(--card-radius);
+      margin-bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    h1 {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--color-foreground);
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .action-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      padding: 8px 10px;
+      font: inherit;
+      font-size: 14px;
+      color: var(--color-foreground);
+      background: var(--color-background-base);
+      border: 1px solid var(--color-foreground);
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .action-btn:hover {
+      box-shadow: 2px 2px 6px var(--interaction-shadow);
+    }
+
+    .action-btn .ul { text-decoration: underline; }
+
+    .help-text {
+      font-size: 12px;
+      color: var(--color-foreground-muted);
+      background: var(--color-background-sunken);
+      padding: 8px 12px;
+      border-radius: 4px;
+    }
+
+    .main-content {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+
+    .text-input-panel {
+      background: var(--color-background-elevated);
+      padding: 20px;
+      border-radius: var(--card-radius);
+      width: 350px;
+      flex-shrink: 0;
+    }
+
+    .text-input-panel h2 {
+      font-size: 16px;
+      font-weight: 500;
+      margin-bottom: 10px;
+    }
+
+    .text-input-panel textarea {
+      width: 100%;
+      min-height: 400px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      padding: 12px;
+      border: 1px solid var(--color-foreground-subtle);
+      border-radius: 4px;
+      resize: vertical;
+      line-height: 1.6;
+      outline: none;
+      tab-size: 3;
+      -moz-tab-size: 3;
+      color: var(--color-foreground);
+      background: var(--color-background-base);
+    }
+
+    .text-input-panel textarea:focus {
+      border-color: var(--color-accent);
+    }
+
+    .text-input-panel .instructions {
+      font-size: 11px;
+      color: var(--color-foreground-muted);
+      margin-top: 8px;
+      line-height: 1.4;
+    }
+
+    .hierarchy-container {
+      flex: 1;
+      min-width: 0;
+      overflow: auto;
+      background: var(--color-background-elevated);
+      border-radius: var(--card-radius);
+      max-height: calc(100vh - 140px);
+    }
+
+    .hierarchy {
+      padding: 60px;
+      min-height: 600px;
+      min-width: fit-content;
+      position: relative;
+    }
+
+    .task {
+      position: relative;
+      display: inline-block;
+      cursor: pointer;
+      transition: box-shadow 0.15s ease;
+      user-select: none;
+      padding: 5px;
+      margin: -5px;
+    }
+
+    .task-main {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .task-id {
+      font-size: 10px;
+      font-weight: 400;
+      color: var(--color-foreground);
+      padding: 2px 4px;
+      min-height: 14px;
+      line-height: 12px;
+    }
+
+    .task-box {
+      background: var(--color-task-box);
+      border: 1px solid var(--color-foreground);
+      border-radius: 2px;
+      padding: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 33px;
+      min-width: 80px;
+    }
+
+    .task-title {
+      font-size: 14px;
+      font-weight: 400;
+      color: var(--color-foreground);
+      text-align: center;
+      padding: 2px;
+      max-width: 300px;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+      overflow-wrap: break-word;
+    }
+
+    .task.selected .task-box {
+      background: var(--color-task-box-selected);
+      box-shadow: 0 0 0 2px var(--color-accent);
+    }
+
+    .task:hover:not(.selected) .task-box {
+      box-shadow: 4px 4px 4px var(--interaction-shadow);
+    }
+
+    .connectors {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 0;
+      overflow: visible;
+    }
+
+    .connector-line {
+      stroke: var(--color-foreground);
+      stroke-width: 1;
+      fill: none;
+    }
+
+    .node-group {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 40px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .node {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 40px;
+    }
+
+    .node-children {
+      display: flex;
+      gap: 30px;
+      align-items: flex-start;
+      justify-content: center;
+    }
+
+    .status-message {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: var(--color-foreground);
+      color: var(--color-background-elevated);
+      padding: 12px 20px;
+      border-radius: 4px;
+      font-size: 13px;
+      opacity: 0;
+      transition: opacity 0.3s;
+      z-index: 1000;
+      pointer-events: none;
+      max-width: min(480px, calc(100vw - 40px));
+      white-space: pre-wrap;
+    }
+
+    .status-message.show { opacity: 1; }
+    .status-message.error { background: #c96b6b; color: #fff; }
+    .status-message.success { background: #6baf8a; color: #0d1117; }
+
+    .hint {
+      margin-top: 12px;
+      font-size: 12px;
+      color: var(--color-foreground-muted);
+    }
+  </style>
+</head>
+<body data-theme="light">
+  <div class="container">
+    <div class="header">
+      <h1>HTA Editor — Hierarchical Task Analysis</h1>
+      <div class="toolbar">
+        <button type="button" class="action-btn" data-action="setThemeLight" data-shortcut="l" title="Light mode (L)">
+          <span class="ul">L</span><span>ight</span>
+        </button>
+        <button type="button" class="action-btn" data-action="setThemeDark" data-shortcut="d" title="Dark mode (D)">
+          <span class="ul">D</span><span>ark</span>
+        </button>
+        <button type="button" class="action-btn" data-action="exportState" title="Export hierarchy (JSON)">
+          Export
+        </button>
+        <button type="button" class="action-btn" data-action="importState" title="Import hierarchy (JSON)">
+          Import
+        </button>
+        <input type="file" id="import-state-file" accept=".json,application/json" hidden />
+        <span class="help-text">Tab indent · Esc clears selection</span>
+      </div>
+    </div>
+
+    <div class="main-content">
+      <div class="text-input-panel">
+        <h2>Text Input</h2>
+        <textarea id="textInput" placeholder="Enter hierarchy using tabs for indentation...">Read File
+	Read Header
+		Read File Version
+		Read Meta Data
+	Read Body</textarea>
+        <div class="instructions">
+          Use tabs for indentation. Each level is a child task. The diagram updates
+          automatically after 3 seconds of inactivity. Tree state is the source of truth;
+          this panel is a synced authoring view.
+        </div>
+      </div>
+
+      <div class="hierarchy-container">
+        <div class="hierarchy" id="hierarchy" aria-label="HTA hierarchy">
+          <svg class="connectors" id="connectors" aria-hidden="true"></svg>
+        </div>
+      </div>
+    </div>
+
+    <p class="hint">
+      State-driven editor (<code>scripts/hta-editor-app.js</code>). Legacy reference:
+      <code>hta-editor.html</code>. Smoke tests: <code>python3 scripts/hta-editor-smoke-test.py</code>
+    </p>
+  </div>
+
+  <div class="status-message" id="statusMessage"></div>
+
+  <script src="scripts/hta-editor-app.js"></script>
+</body>
+</html>

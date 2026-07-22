@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "meta": {
+    "theme": "light"
+  },
+  "root": {
+    "id": "1",
+    "title": "Koka vatten i en vattenkokare",
+    "level": 0,
+    "children": [
+      {
+        "id": "1.1",
+        "title": "Förbereda och fylla vattenkokaren",
+        "level": 1,
+        "children": [
+          {
+            "id": "1.1.1",
+            "title": "Öppna locket",
+            "level": 2,
+            "children": []
+          },
+          {
+            "id": "1.1.2",
+            "title": "Fyll på vatten (mellan MIN- och MAX-nivå)",
+            "level": 2,
+            "children": []
+          },
+          {
+            "id": "1.1.3",
+            "title": "Stäng locket ordentligt",
+            "level": 2,
+            "children": []
+          }
+        ]
+      },
+      {
+        "id": "1.2",
+        "title": "Placera och ansluta",
+        "level": 1,
+        "children": [
+          {
+            "id": "1.2.1",
+            "title": "Placera vattenkokaren på bottenplattan",
+            "level": 2,
+            "children": []
+          },
+          {
+            "id": "1.2.2",
+            "title": "Anslut kontakten till vägguttaget",
+            "level": 2,
+            "children": []
+          }
+        ]
+      },
+      {
+        "id": "1.3",
+        "title": "Starta uppvärmning",
+        "level": 1,
+        "children": [
+          {
+            "id": "1.3.1",
+            "title": "Tryck på strömbrytaren (ON)",
+            "level": 2,
+            "children": []
+          },
+          {
+            "id": "1.3.2",
+            "title": "Vänta tills kokaren stängs av automatiskt",
+            "level": 2,
+            "children": []
+          }
+        ]
+      },
+      {
+        "id": "1.4",
+        "title": "Servera vattnet",
+        "level": 1,
+        "children": [
+          {
+            "id": "1.4.1",
+            "title": "Lyft vattenkokaren från bottenplattan",
+            "level": 2,
+            "children": []
+          },
+          {
+            "id": "1.4.2",
+            "title": "Häll upp det kokande vattnet i önskat kärl",
+            "level": 2,
+            "children": []
+          }
+        ]
+      }
+    ]
+  }
+}
