@@ -1,15 +1,40 @@
 (function () {
   "use strict";
 
-  const DIAGRAM_VERSION = 1;
+  const DIAGRAM_VERSION = 2;
   const UPDATE_DEBOUNCE_MS = 3000;
   const HISTORY_LIMIT = 100;
+  const COLUMN_STORAGE_KEY = "hta-tta-columns";
+
+  const DEFAULT_COLUMNS = [
+    { id: "taskStep", label: "Task Step", visible: true, order: 0 },
+    { id: "externalErrorMode", label: "External Error Mode", visible: true, order: 1 },
+    { id: "recovery", label: "Recovery", visible: true, order: 2 },
+    { id: "consequence", label: "Consequence", visible: true, order: 3 },
+    { id: "humanErrorType", label: "Human Error Type", visible: true, order: 4 },
+    { id: "psf", label: "PSFs", visible: true, order: 5 },
+    { id: "comments", label: "Comments", visible: true, order: 6 },
+  ];
+
+  const EXTERNAL_ERROR_MODES = [
+    "Omission",
+    "Action too much",
+    "Action too little",
+    "Action too late",
+    "Action too early",
+    "Mis-ordering",
+    "Wrong action",
+  ];
 
   const hierarchyEl = document.getElementById("hierarchy");
   const connectorsSvg = document.getElementById("connectors");
-  const textInput = document.getElementById("textInput");
+  const textInput = document.getElementById("textInput"); // absent in HTA.html
   const statusMessage = document.getElementById("statusMessage");
   const importFileInput = document.getElementById("import-state-file");
+  const ttaThead = document.getElementById("ttaThead");
+  const ttaTbody = document.getElementById("ttaTbody");
+  const columnPicker = document.getElementById("columnPicker");
+  const columnPickerList = document.getElementById("columnPickerList");
 
   let state = null;
   const ui = { selectedTaskId: null, keyboardHoverId: null };
@@ -25,6 +50,7 @@
   let syncingTextPanel = false;
   let editSession = null;
   let blurNavigation = null; // 'tab' | 'apply' | 'cancel' | null
+  let recordIdSeq = 1;
 
   // ---------- Status ----------
 
@@ -181,6 +207,27 @@
     return node;
   }
 
+  /** Reassign hierarchical ids and remap ttaRecords.taskId to match. */
+  function reassignIdsAndRemapTta(s) {
+    if (!s?.root) return;
+    function stamp(node) {
+      node._prevId = node.id;
+      (node.children || []).forEach(stamp);
+    }
+    stamp(s.root);
+    reassignIds(s.root);
+    const idMap = new Map();
+    function unstamp(node) {
+      idMap.set(node._prevId, node.id);
+      delete node._prevId;
+      (node.children || []).forEach(unstamp);
+    }
+    unstamp(s.root);
+    (s.ttaRecords || []).forEach((r) => {
+      if (idMap.has(r.taskId)) r.taskId = idMap.get(r.taskId);
+    });
+  }
+
   // ---------- Validation ----------
 
   function validateState(s) {
@@ -281,10 +328,107 @@
       root = parseHierarchy(raw.text);
     }
     if (root) reassignIds(root);
+    const columns = normalizeColumns(raw?.meta?.columns);
+    const ttaRecords = normalizeTtaRecords(raw?.ttaRecords);
     return {
       version: DIAGRAM_VERSION,
-      meta: { theme },
+      meta: { theme, columns },
       root,
+      ttaRecords,
+    };
+  }
+
+  function normalizeColumns(cols) {
+    if (!Array.isArray(cols) || !cols.length) {
+      try {
+        const cached = JSON.parse(localStorage.getItem(COLUMN_STORAGE_KEY) || "null");
+        if (Array.isArray(cached) && cached.length) {
+          return normalizeColumns(cached);
+        }
+      } catch (_) {
+        /* ignore */
+      }
+      return DEFAULT_COLUMNS.map((c) => ({ ...c }));
+    }
+    const byId = new Map(cols.map((c) => [c.id, c]));
+    return DEFAULT_COLUMNS.map((def, i) => {
+      const hit = byId.get(def.id);
+      return {
+        id: def.id,
+        label: def.label,
+        visible: hit?.visible !== false,
+        order: typeof hit?.order === "number" ? hit.order : i,
+      };
+    }).sort((a, b) => a.order - b.order);
+  }
+
+  function normalizeTtaRecords(list) {
+    if (!Array.isArray(list)) return [];
+    return list
+      .filter((r) => r && typeof r === "object")
+      .map((r, i) => ({
+        id: typeof r.id === "string" && r.id ? r.id : `r${i + 1}`,
+        taskId: String(r.taskId || ""),
+        externalErrorMode: String(r.externalErrorMode || ""),
+        recovery: String(r.recovery || ""),
+        consequence: String(r.consequence || ""),
+        humanErrorType: String(r.humanErrorType || ""),
+        psf: Array.isArray(r.psf)
+          ? r.psf.map(String)
+          : String(r.psf || "")
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean),
+        comments: String(r.comments || ""),
+      }));
+  }
+
+  function newRecordId() {
+    const id = `r${Date.now().toString(36)}${recordIdSeq++}`;
+    return id;
+  }
+
+  function sampleSeedState() {
+    const root = parseHierarchy(
+      "Operate Train\n\tSet Speed\n\tApply Brake"
+    );
+    reassignIds(root);
+    return {
+      version: DIAGRAM_VERSION,
+      meta: { theme: "light", columns: DEFAULT_COLUMNS.map((c) => ({ ...c })) },
+      root,
+      ttaRecords: [
+        {
+          id: "r1",
+          taskId: "1.1",
+          externalErrorMode: "Action too much",
+          recovery: "Auto-cutout",
+          consequence: "Overspeed",
+          humanErrorType: "Skill-based slip",
+          psf: ["Interface"],
+          comments: "",
+        },
+        {
+          id: "r2",
+          taskId: "1.1",
+          externalErrorMode: "Action too late",
+          recovery: "Driver prompt",
+          consequence: "Late arrival",
+          humanErrorType: "Rule-based mistake",
+          psf: ["Procedures"],
+          comments: "",
+        },
+        {
+          id: "r3",
+          taskId: "1.2",
+          externalErrorMode: "Omission",
+          recovery: "Signal alert",
+          consequence: "Signal passed",
+          humanErrorType: "Lapse",
+          psf: ["Environment"],
+          comments: "",
+        },
+      ],
     };
   }
 
@@ -293,21 +437,33 @@
   function serializeState(s = state) {
     return {
       version: DIAGRAM_VERSION,
-      meta: { theme: s.meta?.theme || "light" },
+      meta: {
+        theme: s.meta?.theme || "light",
+        columns: (s.meta?.columns || DEFAULT_COLUMNS).map((c) => ({ ...c })),
+      },
       root: cloneNode(s.root),
+      ttaRecords: (s.ttaRecords || []).map((r) => ({
+        ...r,
+        psf: [...(r.psf || [])],
+      })),
     };
   }
 
   function hydrateFromDom() {
-    const text = textInput?.value ?? "";
-    const root = parseHierarchy(text) || {
-      id: "1",
-      title: "Root Task",
-      level: 0,
-      children: [],
-    };
+    if (textInput?.value?.trim()) {
+      const root = parseHierarchy(textInput.value);
+      const theme = document.body.dataset.theme === "dark" ? "dark" : "light";
+      return {
+        version: DIAGRAM_VERSION,
+        meta: { theme, columns: DEFAULT_COLUMNS.map((c) => ({ ...c })) },
+        root,
+        ttaRecords: [],
+      };
+    }
+    const seed = sampleSeedState();
     const theme = document.body.dataset.theme === "dark" ? "dark" : "light";
-    return { version: DIAGRAM_VERSION, meta: { theme }, root };
+    seed.meta.theme = theme;
+    return seed;
   }
 
   // ---------- Theme ----------
@@ -474,7 +630,7 @@
       movedNode = ctx.siblings[ctx.index];
       ctx.siblings.splice(ctx.index, 1);
       ctx.siblings.splice(next, 0, movedNode);
-      reassignIds(s.root);
+      reassignIdsAndRemapTta(s);
       ui.selectedTaskId = movedNode.id;
     });
     if (!movedNode) return false;
@@ -628,6 +784,161 @@
     syncingTextPanel = false;
   }
 
+  function visibleColumns() {
+    return (state?.meta?.columns || DEFAULT_COLUMNS)
+      .slice()
+      .sort((a, b) => a.order - b.order)
+      .filter((c) => c.visible !== false);
+  }
+
+  function persistColumns() {
+    try {
+      localStorage.setItem(
+        COLUMN_STORAGE_KEY,
+        JSON.stringify(state.meta.columns || [])
+      );
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
+  function orderedTtaRows() {
+    if (!state?.root) return [];
+    const order = new Map();
+    collectLineMap(state.root).forEach((entry, i) => order.set(entry.id, i));
+    const records = [...(state.ttaRecords || [])];
+    records.sort((a, b) => {
+      const oa = order.has(a.taskId) ? order.get(a.taskId) : Number.MAX_SAFE_INTEGER;
+      const ob = order.has(b.taskId) ? order.get(b.taskId) : Number.MAX_SAFE_INTEGER;
+      if (oa !== ob) return oa - ob;
+      return String(a.id).localeCompare(String(b.id));
+    });
+    return records;
+  }
+
+  function taskRefFor(taskId) {
+    const node = findTask(state?.root, taskId);
+    if (!node) return taskId || "";
+    return `${node.id} ${node.title}`;
+  }
+
+  function renderTta() {
+    if (!ttaThead || !ttaTbody || !state) return;
+    const cols = visibleColumns();
+    ttaThead.innerHTML = "";
+    const trh = document.createElement("tr");
+    cols.forEach((col) => {
+      const th = document.createElement("th");
+      th.dataset.col = col.id;
+      th.textContent = col.label;
+      trh.appendChild(th);
+    });
+    ttaThead.appendChild(trh);
+
+    ttaTbody.innerHTML = "";
+    orderedTtaRows().forEach((rec) => {
+      const tr = document.createElement("tr");
+      tr.dataset.recordId = rec.id;
+      tr.dataset.taskId = rec.taskId;
+      if (ui.selectedTaskId && rec.taskId === ui.selectedTaskId) {
+        tr.classList.add("is-selected");
+      }
+      tr.addEventListener("click", (e) => {
+        if (e.target.closest("[contenteditable], select")) return;
+        selectTask(rec.taskId, { skipTextFocus: true });
+      });
+
+      cols.forEach((col) => {
+        const td = document.createElement("td");
+        td.dataset.col = col.id;
+        if (col.id === "taskStep") {
+          td.className = "tta-task-ref";
+          td.textContent = taskRefFor(rec.taskId);
+        } else if (col.id === "externalErrorMode") {
+          const sel = document.createElement("select");
+          sel.innerHTML = EXTERNAL_ERROR_MODES.map(
+            (m) =>
+              `<option value="${m}"${m === rec.externalErrorMode ? " selected" : ""}>${m}</option>`
+          ).join("");
+          if (
+            rec.externalErrorMode &&
+            !EXTERNAL_ERROR_MODES.includes(rec.externalErrorMode)
+          ) {
+            const opt = document.createElement("option");
+            opt.value = rec.externalErrorMode;
+            opt.selected = true;
+            opt.textContent = rec.externalErrorMode;
+            sel.appendChild(opt);
+          }
+          sel.addEventListener("change", () => {
+            rec.externalErrorMode = sel.value;
+            commit(() => {});
+          });
+          td.appendChild(sel);
+        } else if (col.id === "psf") {
+          td.contentEditable = "true";
+          td.spellcheck = false;
+          td.textContent = (rec.psf || []).join(", ");
+          td.addEventListener("blur", () => {
+            rec.psf = readEditableText(td)
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean);
+            commit(() => {});
+          });
+        } else {
+          const key = col.id;
+          td.contentEditable = "true";
+          td.spellcheck = false;
+          td.textContent = rec[key] || "";
+          td.addEventListener("blur", () => {
+            rec[key] = readEditableText(td);
+            commit(() => {});
+          });
+        }
+        tr.appendChild(td);
+      });
+      ttaTbody.appendChild(tr);
+    });
+
+    renderColumnPicker();
+  }
+
+  function renderColumnPicker() {
+    if (!columnPickerList || !state?.meta?.columns) return;
+    columnPickerList.innerHTML = "";
+    state.meta.columns
+      .slice()
+      .sort((a, b) => a.order - b.order)
+      .forEach((col) => {
+        const label = document.createElement("label");
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = col.visible !== false;
+        cb.addEventListener("change", () => {
+          col.visible = cb.checked;
+          persistColumns();
+          renderTta();
+        });
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode(col.label));
+        columnPickerList.appendChild(label);
+      });
+  }
+
+  function highlightTtaForTask(taskId) {
+    if (!ttaTbody) return;
+    let first = null;
+    ttaTbody.querySelectorAll("tr").forEach((tr) => {
+      const on = taskId && tr.dataset.taskId === taskId;
+      tr.classList.toggle("is-selected", on);
+      if (on && !first) first = tr;
+    });
+    if (first) {
+      first.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }
+
   function applySelectionUI() {
     document.querySelectorAll(".task").forEach((el) => el.classList.remove("selected"));
     if (!ui.selectedTaskId) return;
@@ -669,27 +980,36 @@
     renderNode(s.root, hierarchyEl);
     applySelectionUI();
     applyKeyboardHoverUI();
+    renderTta();
     setTimeout(buildConnectors, 50);
   }
 
   // ---------- Commit / apply ----------
 
+  function applyState(next) {
+    ui.selectedTaskId = null;
+    clearKeyboardHover();
+    if (!next.ttaRecords) next.ttaRecords = [];
+    if (!next.meta) next.meta = {};
+    if (!next.meta.columns) next.meta.columns = DEFAULT_COLUMNS.map((c) => ({ ...c }));
+    state = next;
+    setTheme(state.meta?.theme || "light");
+    render(state);
+    syncTextPanel();
+    updateToolbarEnabled();
+  }
+
   function commit(mutator) {
     if (!state) state = hydrateFromDom();
+    if (!state.ttaRecords) state.ttaRecords = [];
+    if (!state.meta) state.meta = { theme: "light" };
+    if (!state.meta.columns) state.meta.columns = DEFAULT_COLUMNS.map((c) => ({ ...c }));
     mutator(state);
     const warnings = validateState(state);
     warnings.forEach((w) => console.warn("[HTA]", w));
     render(state);
     syncTextPanel();
-  }
-
-  function applyState(next) {
-    ui.selectedTaskId = null;
-    clearKeyboardHover();
-    state = next;
-    setTheme(state.meta?.theme || "light");
-    render(state);
-    syncTextPanel();
+    updateToolbarEnabled();
   }
 
   function loadState(raw) {
@@ -747,13 +1067,198 @@
     clearKeyboardHover();
     ui.selectedTaskId = taskId;
     applySelectionUI();
+    highlightTtaForTask(taskId);
     if (!skipTextFocus) selectTextLineForTask(taskId);
+    updateToolbarEnabled();
   }
 
   function clearSelection() {
     ui.selectedTaskId = null;
     clearKeyboardHover();
     applySelectionUI();
+    highlightTtaForTask(null);
+    updateToolbarEnabled();
+  }
+
+  function activeTaskId() {
+    return ui.selectedTaskId || ui.keyboardHoverId || null;
+  }
+
+  function updateToolbarEnabled() {
+    const id = activeTaskId();
+    const siblingBtn = document.querySelector('[data-action="addSibling"]');
+    if (siblingBtn) siblingBtn.disabled = !id || id === state?.root?.id;
+  }
+
+  function collectSubtreeIds(node, out = []) {
+    if (!node) return out;
+    out.push(node.id);
+    (node.children || []).forEach((c) => collectSubtreeIds(c, out));
+    return out;
+  }
+
+  function addChildTask() {
+    const id = activeTaskId() || state?.root?.id;
+    if (!id || !state?.root) return;
+    let created = null;
+    commit((s) => {
+      const parent = findTask(s.root, id);
+      if (!parent) return;
+      if (!parent.children) parent.children = [];
+      created = {
+        id: "tmp",
+        title: "New task",
+        level: (parent.level || 0) + 1,
+        children: [],
+      };
+      parent.children.push(created);
+      reassignIdsAndRemapTta(s);
+    });
+    if (created) selectTask(created.id, { skipTextFocus: true });
+  }
+
+  function addSiblingTask() {
+    const id = activeTaskId();
+    if (!id || !state?.root || id === state.root.id) {
+      showStatus("Root has no sibling", "error");
+      return;
+    }
+    let created = null;
+    commit((s) => {
+      const parent = findParentOf(s.root, id);
+      if (!parent) return;
+      const idx = parent.children.findIndex((c) => c.id === id);
+      if (idx < 0) return;
+      created = {
+        id: "tmp",
+        title: "New task",
+        level: (parent.level || 0) + 1,
+        children: [],
+      };
+      parent.children.splice(idx + 1, 0, created);
+      reassignIdsAndRemapTta(s);
+    });
+    if (created) selectTask(created.id, { skipTextFocus: true });
+  }
+
+  function duplicateTask() {
+    const id = activeTaskId();
+    if (!id || !state?.root) return;
+    if (id === state.root.id) {
+      showStatus("Duplicate root is not supported", "error");
+      return;
+    }
+    let dupRoot = null;
+    commit((s) => {
+      const parent = findParentOf(s.root, id);
+      const node = findTask(s.root, id);
+      if (!parent || !node) return;
+      const idx = parent.children.findIndex((c) => c.id === id);
+      if (idx < 0) return;
+
+      function cloneFresh(src) {
+        return {
+          id: "tmp",
+          title: src.title,
+          level: src.level,
+          children: (src.children || []).map(cloneFresh),
+          _srcId: src.id,
+        };
+      }
+
+      dupRoot = cloneFresh(node);
+      parent.children.splice(idx + 1, 0, dupRoot);
+
+      const copies = [];
+      function collectCopies(n) {
+        (s.ttaRecords || []).forEach((r) => {
+          if (r.taskId === n._srcId) {
+            copies.push({
+              id: newRecordId(),
+              taskId: null,
+              externalErrorMode: r.externalErrorMode,
+              recovery: r.recovery,
+              consequence: r.consequence,
+              humanErrorType: r.humanErrorType,
+              psf: [...(r.psf || [])],
+              comments: r.comments,
+              _bind: n,
+            });
+          }
+        });
+        (n.children || []).forEach(collectCopies);
+      }
+      collectCopies(dupRoot);
+
+      reassignIdsAndRemapTta(s);
+
+      copies.forEach((c) => {
+        c.taskId = c._bind.id;
+        delete c._bind;
+      });
+      s.ttaRecords = [...(s.ttaRecords || []), ...copies];
+
+      function scrub(n) {
+        delete n._srcId;
+        (n.children || []).forEach(scrub);
+      }
+      scrub(s.root);
+      dupRoot = parent.children[idx + 1];
+    });
+    if (dupRoot) selectTask(dupRoot.id, { skipTextFocus: true });
+  }
+
+  function deleteSelectedTask() {
+    const id = ui.selectedTaskId;
+    if (!id || !state?.root) return;
+    if (id === state.root.id) {
+      showStatus("Cannot delete root task", "error");
+      return;
+    }
+    commit((s) => {
+      const parent = findParentOf(s.root, id);
+      const node = findTask(s.root, id);
+      if (!parent || !node) return;
+      const removed = new Set(collectSubtreeIds(node));
+      parent.children = parent.children.filter((c) => c.id !== id);
+      s.ttaRecords = (s.ttaRecords || []).filter((r) => !removed.has(r.taskId));
+      reassignIdsAndRemapTta(s);
+    });
+    clearSelection();
+  }
+
+  function addTtaRow() {
+    const taskId = activeTaskId();
+    if (!taskId) {
+      showStatus("Select a task first", "error");
+      return;
+    }
+    commit((s) => {
+      if (!s.ttaRecords) s.ttaRecords = [];
+      s.ttaRecords.push({
+        id: newRecordId(),
+        taskId,
+        externalErrorMode: "Omission",
+        recovery: "",
+        consequence: "",
+        humanErrorType: "",
+        psf: [],
+        comments: "",
+      });
+    });
+    selectTask(taskId, { skipTextFocus: true });
+  }
+
+  function toggleColumnPicker() {
+    columnPicker?.classList.toggle("open");
+  }
+
+  function resetColumns() {
+    if (!state) return;
+    state.meta.columns = DEFAULT_COLUMNS.map((c) => ({ ...c }));
+    persistColumns();
+    renderTta();
+    showStatus("Columns reset", "success");
   }
 
   // ---------- Text history ----------
@@ -838,10 +1343,10 @@
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "hta-hierarchy.json";
+    a.download = "hta-tta.json";
     a.click();
     URL.revokeObjectURL(url);
-    showStatus("Exported JSON", "success");
+    showStatus("Exported HTA+TTA JSON", "success");
   }
 
   function importStateFromFile() {
@@ -855,6 +1360,12 @@
     setThemeDark: () => setTheme("dark"),
     exportState: () => exportStateToFile(),
     importState: () => importStateFromFile(),
+    addChild: () => addChildTask(),
+    addSibling: () => addSiblingTask(),
+    duplicateTask: () => duplicateTask(),
+    addTtaRow: () => addTtaRow(),
+    toggleColumnPicker: () => toggleColumnPicker(),
+    resetColumns: () => resetColumns(),
   };
 
   function runAction(name) {
@@ -1054,7 +1565,18 @@
     }
 
     if (e.key === "Escape") {
+      columnPicker?.classList.remove("open");
       clearSelection();
+      return;
+    }
+
+    if (e.key === "Delete" || e.key === "Backspace") {
+      if (document.activeElement?.isContentEditable) return;
+      if (document.activeElement?.tagName === "SELECT") return;
+      if (document.activeElement?.tagName === "INPUT") return;
+      if (!ui.selectedTaskId) return;
+      e.preventDefault();
+      deleteSelectedTask();
       return;
     }
 
@@ -1063,6 +1585,16 @@
     if (btn && !e.metaKey && !e.ctrlKey && !e.altKey) {
       e.preventDefault();
       runAction(btn.dataset.action);
+    }
+  });
+
+  document.addEventListener("click", (e) => {
+    if (
+      columnPicker?.classList.contains("open") &&
+      !e.target.closest("#columnPicker") &&
+      !e.target.closest('[data-action="toggleColumnPicker"]')
+    ) {
+      columnPicker.classList.remove("open");
     }
   });
 
@@ -1075,8 +1607,9 @@
 
   state = hydrateFromDom();
   setTheme(state.meta.theme);
-  resetHistory(textInput?.value ?? "");
+  if (textInput) resetHistory(textInput.value ?? "");
   render(state);
+  updateToolbarEnabled();
 
   // Expose for smoke tests / debugging
   window.HTAEditor = {
@@ -1089,5 +1622,10 @@
     formatImportValidationMessage,
     commitFromText,
     countTasks,
+    orderedTtaRows,
+    addChildTask,
+    addSiblingTask,
+    duplicateTask,
+    deleteSelectedTask,
   };
 })();

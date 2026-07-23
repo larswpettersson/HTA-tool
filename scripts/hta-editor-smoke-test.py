@@ -225,6 +225,38 @@ def main() -> int:
         assert_contains("hta-editor2.html", html, "--color-background-base")
         assert_contains("hta-editor2.html", html, 'body[data-theme="dark"]')
         assert_contains("hta-editor2.html", html, "Source Sans 3")
+        assert_contains("hta-editor2.html", html, ".desc-text")
+        assert_contains("hta-editor2.html", html, ".task.is-keyboard-hover")
+
+    def test_description_edit_session() -> None:
+        for name in (
+            "function startEditSession",
+            "function applyEditSession",
+            "function cancelEditSession",
+            "function handleEditBlur",
+            "function beginFieldEdit",
+            "function setKeyboardNavTarget",
+            "function navigateTasks",
+            "function navigateSiblingHover",
+            "function moveSelectedAmongSiblings",
+            "function handleHorizontalArrow",
+            "function handleEnterOnComponent",
+            "function getSiblingContext",
+            "function findParentOf",
+            'dataset.role = "description"',
+            'className = "desc-text"',
+            'contentEditable = "true"',
+            "setKeyboardNavTarget(el, { select: false })",
+            'beginFieldEdit(current, "description")',
+        ):
+            assert_contains("hta-editor-app.js", js, name)
+        assert_not_contains("hta-editor-app.js", js, 'className = "task-title"')
+        assert_not_contains("hta-editor-app.js", js, 'dataset.role = "title"')
+        assert_true(
+            "taskId.contentEditable" not in js,
+            "task ID must not be contenteditable",
+        )
+        assert_contains("hta-editor-app.js", js, 'dataset.role = "id"')
 
     print("hta-editor2 smoke tests")
     for fn in (
@@ -237,6 +269,7 @@ def main() -> int:
         test_import_validation_blocks_broken,
         test_import_validation_accepts_sample,
         test_css_theme_tokens,
+        test_description_edit_session,
     ):
         check(fn)
 

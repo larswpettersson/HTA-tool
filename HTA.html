@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>HTA Editor — Hierarchical Task Analysis</title>
+  <title>HTA + TTA — Hierarchical & Tabular Task Analysis</title>
   <!--
-    State-driven refactor of hta-editor.html — in-memory tree + render-from-state.
-    App logic: scripts/hta-editor-app.js
-    Typography: Source Sans 3 (HFA / Bowtie alignment).
+    Copy of hta-editor2.html with Text Input replaced by TTA panel.
+    App logic: scripts/hta-app.js
+    Design ref: HFA DS page "TTA draft"
   -->
   <style>
     :root {
@@ -18,8 +18,10 @@
       --color-foreground-muted: #57606a;
       --color-foreground-subtle: #8b949e;
       --color-accent: #4a90e2;
+      --color-brand-primary: #d70000;
       --color-task-box: #b1b2b5;
       --color-task-box-selected: #828384;
+      --color-row-selected: #e8f1fb;
       --font-sans: "Source Sans 3", "Source Sans Pro", system-ui,
                    -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       --font-mono: "Source Code Pro", "Roboto Mono", "Courier New", monospace;
@@ -37,6 +39,7 @@
       --color-accent: #78a8db;
       --color-task-box: #4a4d52;
       --color-task-box-selected: #5c6066;
+      --color-row-selected: #243447;
       --interaction-shadow: color-mix(in srgb, var(--color-foreground) 50%, transparent);
       background: var(--color-background-sunken);
     }
@@ -53,15 +56,15 @@
       padding: 20px;
     }
 
-    .container { max-width: 1600px; margin: 0 auto; }
+    .container { max-width: 1700px; margin: 0 auto; }
 
     .header {
       background: var(--color-background-elevated);
-      padding: 16px 24px;
+      padding: 12px 16px;
       border-radius: var(--card-radius);
       margin-bottom: 16px;
       display: flex;
-      justify-content: space-between;
+      justify-content: flex-start;
       align-items: center;
       gap: 12px;
       flex-wrap: wrap;
@@ -78,6 +81,7 @@
       gap: 8px;
       align-items: center;
       flex-wrap: wrap;
+      width: 100%;
     }
 
     .action-btn {
@@ -98,6 +102,12 @@
       box-shadow: 2px 2px 6px var(--interaction-shadow);
     }
 
+    .action-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
     .action-btn .ul { text-decoration: underline; }
 
     .help-text {
@@ -114,62 +124,39 @@
       align-items: flex-start;
     }
 
-    .text-input-panel {
-      background: var(--color-background-elevated);
-      padding: 20px;
-      border-radius: var(--card-radius);
-      width: 350px;
-      flex-shrink: 0;
-    }
-
-    .text-input-panel h2 {
-      font-size: 16px;
-      font-weight: 500;
-      margin-bottom: 10px;
-    }
-
-    .text-input-panel textarea {
-      width: 100%;
-      min-height: 400px;
-      font-family: var(--font-mono);
-      font-size: 13px;
-      padding: 12px;
-      border: 1px solid var(--color-foreground-subtle);
-      border-radius: 4px;
-      resize: vertical;
-      line-height: 1.6;
-      outline: none;
-      tab-size: 3;
-      -moz-tab-size: 3;
-      color: var(--color-foreground);
-      background: var(--color-background-base);
-    }
-
-    .text-input-panel textarea:focus {
-      border-color: var(--color-accent);
-    }
-
-    .text-input-panel .instructions {
-      font-size: 11px;
-      color: var(--color-foreground-muted);
-      margin-top: 8px;
-      line-height: 1.4;
-    }
-
     .hierarchy-container {
-      flex: 1;
-      min-width: 0;
+      flex: 0 1 42%;
+      min-width: 280px;
       overflow: auto;
       background: var(--color-background-elevated);
       border-radius: var(--card-radius);
       max-height: calc(100vh - 140px);
+      display: flex;
+      flex-direction: column;
+      padding: 16px;
+      gap: 12px;
+    }
+
+    .hta-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      flex-shrink: 0;
+    }
+
+    .hta-header h2 {
+      font-size: 16px;
+      font-weight: 600;
     }
 
     .hierarchy {
-      padding: 60px;
+      padding: 44px 44px 60px;
       min-height: 600px;
       min-width: fit-content;
       position: relative;
+      flex: 1;
     }
 
     .task {
@@ -200,13 +187,14 @@
     .task-box {
       background: var(--color-task-box);
       border: 1px solid var(--color-foreground);
-      border-radius: 2px;
+      border-radius: 8px;
       padding: 8px;
       display: flex;
       align-items: center;
       justify-content: center;
       min-height: 33px;
       min-width: 80px;
+      transition: box-shadow 0.15s ease;
     }
 
     .desc-text {
@@ -231,9 +219,9 @@
       background: color-mix(in srgb, var(--color-foreground) 12%, transparent);
     }
 
+    /* Penpot Task Selected: drop-shadow blur 2 / spread 4 */
     .task.selected .task-box {
-      background: var(--color-task-box-selected);
-      box-shadow: 0 0 0 2px var(--color-accent);
+      box-shadow: 0 0 2px 4px color-mix(in srgb, var(--color-foreground) 20%, transparent);
     }
 
     .task:hover:not(.selected) .task-box,
@@ -281,6 +269,141 @@
       justify-content: center;
     }
 
+    /* ---------- TTA panel ---------- */
+
+    .tta-panel {
+      flex: 1 1 58%;
+      min-width: 0;
+      background: var(--color-background-elevated);
+      border-radius: var(--card-radius);
+      padding: 16px;
+      max-height: calc(100vh - 140px);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      position: relative;
+    }
+
+    .tta-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .tta-header h2 {
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .tta-toolbar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .tta-table-wrap {
+      overflow: auto;
+      flex: 1;
+      border: 1px solid color-mix(in srgb, var(--color-foreground) 20%, transparent);
+      border-radius: 4px;
+    }
+
+    .tta-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .tta-table th,
+    .tta-table td {
+      border: 1px solid color-mix(in srgb, var(--color-foreground) 15%, transparent);
+      padding: 8px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .tta-table th {
+      background: var(--color-background-sunken);
+      font-size: 11px;
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    .tta-table tbody tr {
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+
+    .tta-table tbody tr.is-selected {
+      background: var(--color-row-selected);
+      box-shadow: inset 4px 0 0 var(--color-brand-primary);
+    }
+
+    .tta-table tbody tr.is-selected td {
+      background: transparent;
+    }
+
+    .tta-table td[contenteditable="true"] {
+      outline: none;
+      min-width: 88px;
+    }
+
+    .tta-table td[contenteditable="true"]:focus {
+      background: color-mix(in srgb, var(--color-foreground) 10%, transparent);
+    }
+
+    .tta-task-ref {
+      font-weight: 500;
+      white-space: pre-wrap;
+    }
+
+    .column-picker {
+      display: none;
+      position: absolute;
+      top: 56px;
+      right: 16px;
+      width: 240px;
+      background: var(--color-background-elevated);
+      border: 1px solid color-mix(in srgb, var(--color-foreground) 25%, transparent);
+      border-radius: 8px;
+      padding: 12px;
+      box-shadow: 4px 4px 12px var(--interaction-shadow);
+      z-index: 5;
+    }
+
+    .column-picker.open { display: block; }
+
+    .column-picker h3 {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .column-picker label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      margin: 6px 0;
+      cursor: pointer;
+    }
+
+    .column-picker input[type="checkbox"] {
+      accent-color: var(--color-foreground-subtle);
+      width: 14px;
+      height: 14px;
+    }
+
+    .column-picker .picker-actions {
+      margin-top: 10px;
+      display: flex;
+      gap: 8px;
+    }
+
     .status-message {
       position: fixed;
       bottom: 20px;
@@ -307,12 +430,21 @@
       font-size: 12px;
       color: var(--color-foreground-muted);
     }
+
+    @media (max-width: 960px) {
+      .main-content { flex-direction: column; }
+      .hierarchy-container,
+      .tta-panel {
+        flex: 1 1 auto;
+        width: 100%;
+        max-height: none;
+      }
+    }
   </style>
 </head>
 <body data-theme="light">
   <div class="container">
     <div class="header">
-      <h1>HTA Editor — Hierarchical Task Analysis</h1>
       <div class="toolbar">
         <button type="button" class="action-btn" data-action="setThemeLight" data-shortcut="l" title="Light mode (L)">
           <span class="ul">L</span><span>ight</span>
@@ -320,49 +452,62 @@
         <button type="button" class="action-btn" data-action="setThemeDark" data-shortcut="d" title="Dark mode (D)">
           <span class="ul">D</span><span>ark</span>
         </button>
-        <button type="button" class="action-btn" data-action="exportState" title="Export hierarchy (JSON)">
-          Export
-        </button>
-        <button type="button" class="action-btn" data-action="importState" title="Import hierarchy (JSON)">
-          Import
-        </button>
+        <button type="button" class="action-btn" data-action="exportState" title="Export HTA+TTA JSON">Export</button>
+        <button type="button" class="action-btn" data-action="importState" title="Import JSON">Import</button>
+        <button type="button" class="action-btn" data-action="addChild" title="Add child under selected/hovered task">Add child</button>
+        <button type="button" class="action-btn" data-action="addSibling" title="Add sibling after selected/hovered task">Add sibling</button>
+        <button type="button" class="action-btn" data-action="duplicateTask" title="Duplicate task and subtree">Duplicate</button>
         <input type="file" id="import-state-file" accept=".json,application/json" hidden />
-        <span class="help-text">↑↓ hover · ←→ siblings · select+←→ reorder · Enter edit · Esc clear</span>
+        <span class="help-text">↑↓ hover · ←→ siblings · select+←→ reorder · Del delete · Enter edit</span>
       </div>
     </div>
 
     <div class="main-content">
-      <div class="text-input-panel">
-        <h2>Text Input</h2>
-        <textarea id="textInput" placeholder="Enter hierarchy using tabs for indentation...">Read File
-	Read Header
-		Read File Version
-		Read Meta Data
-	Read Body</textarea>
-        <div class="instructions">
-          Use tabs for indentation. Each level is a child task. The diagram updates
-          automatically after 3 seconds of inactivity. Tree state is the source of truth;
-          this panel is a synced authoring view. Click a task Description to edit in place
-          (Shift+Enter for newline; Esc cancels to keyboard hover).
+      <div class="hierarchy-container">
+        <div class="hta-header">
+          <h2>HTA</h2>
+        </div>
+        <div class="hierarchy" id="hierarchy" aria-label="HTA hierarchy">
+          <svg class="connectors" id="connectors" aria-hidden="true"></svg>
         </div>
       </div>
 
-      <div class="hierarchy-container">
-        <div class="hierarchy" id="hierarchy" aria-label="HTA hierarchy">
-          <svg class="connectors" id="connectors" aria-hidden="true"></svg>
+      <div class="tta-panel" id="ttaPanel">
+        <div class="tta-header">
+          <h2>TTA</h2>
+          <div class="tta-toolbar">
+            <button type="button" class="action-btn" data-action="toggleColumnPicker" title="Show or hide columns">Columns</button>
+            <button type="button" class="action-btn" disabled title="Filter (coming later)">Filter</button>
+            <button type="button" class="action-btn" data-action="exportState" title="Export HTA+TTA JSON">Export</button>
+            <button type="button" class="action-btn" data-action="addTtaRow" title="Add HEI row for selected task">Add row</button>
+          </div>
+        </div>
+
+        <div class="column-picker" id="columnPicker" role="dialog" aria-label="Column picker">
+          <h3>Columns</h3>
+          <div id="columnPickerList"></div>
+          <div class="picker-actions">
+            <button type="button" class="action-btn" data-action="resetColumns">Reset</button>
+          </div>
+        </div>
+
+        <div class="tta-table-wrap">
+          <table class="tta-table" id="ttaTable" aria-label="Tabular task analysis">
+            <thead id="ttaThead"></thead>
+            <tbody id="ttaTbody"></tbody>
+          </table>
         </div>
       </div>
     </div>
 
     <p class="hint">
-      State-driven editor (<code>scripts/hta-editor-app.js</code>). Description editing matches
-      Bowtie editSession. Legacy: <code>hta-editor.html</code>. Smoke:
-      <code>python3 scripts/hta-editor-smoke-test.py</code>
+      HTA tree is the source of truth; TTA rows attach HEI fields by <code>taskId</code>.
+      Design: HFA DS <code>TTA draft</code>. Smoke: <code>python3 scripts/hta-smoke-test.py</code>
     </p>
   </div>
 
   <div class="status-message" id="statusMessage"></div>
 
-  <script src="scripts/hta-editor-app.js"></script>
+  <script src="scripts/hta-app.js"></script>
 </body>
 </html>

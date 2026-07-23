@@ -2,7 +2,20 @@
 
 This project contains tools for creating and visualizing Hierarchical Task Analysis (HTA) diagrams, along with Penpot MCP (Model Context Protocol) server integration for design interaction.
 
-## HTA Editor (`hta-editor2.html`) — current
+## HTA + TTA Editor (`HTA.html`) — current
+
+State-driven editor aligned with Penpot **HFA DS → TTA draft**: HTML shell + [`scripts/hta-app.js`](scripts/hta-app.js).
+
+- **Left:** HTA hierarchy (Description editSession, keyboard nav, Add child / sibling / Duplicate; Delete/Backspace)
+- **Right:** TTA table (RSSB HEI columns, column picker, selection sync with HTA)
+- JSON **Export** / **Import** includes both tree and `ttaRecords` (`hta-tta.json`)
+- Light/dark theme; smoke: `python3 scripts/hta-smoke-test.py`
+
+Open [`HTA.html`](HTA.html) in a browser — no build step.
+
+Previous text-panel editor: [`hta-editor2.html`](hta-editor2.html) + [`scripts/hta-editor-app.js`](scripts/hta-editor-app.js). Legacy: [`hta-editor.html`](hta-editor.html).
+
+## HTA Editor (`hta-editor2.html`) — text-panel reference
 
 State-driven editor (Bowtie-style): HTML shell + [`scripts/hta-editor-app.js`](scripts/hta-editor-app.js). The **task tree is the source of truth**; the text panel is a synced authoring view.
 

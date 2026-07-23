@@ -1,0 +1,66 @@
+{
+  "version": 2,
+  "meta": {
+    "theme": "light",
+    "columns": [
+      { "id": "taskStep", "label": "Task Step", "visible": true, "order": 0 },
+      { "id": "externalErrorMode", "label": "External Error Mode", "visible": true, "order": 1 },
+      { "id": "recovery", "label": "Recovery", "visible": true, "order": 2 },
+      { "id": "consequence", "label": "Consequence", "visible": true, "order": 3 },
+      { "id": "humanErrorType", "label": "Human Error Type", "visible": true, "order": 4 },
+      { "id": "psf", "label": "PSFs", "visible": true, "order": 5 },
+      { "id": "comments", "label": "Comments", "visible": true, "order": 6 }
+    ]
+  },
+  "root": {
+    "id": "1",
+    "title": "Operate Train",
+    "level": 0,
+    "children": [
+      {
+        "id": "1.1",
+        "title": "Set Speed",
+        "level": 1,
+        "children": []
+      },
+      {
+        "id": "1.2",
+        "title": "Apply Brake",
+        "level": 1,
+        "children": []
+      }
+    ]
+  },
+  "ttaRecords": [
+    {
+      "id": "r1",
+      "taskId": "1.1",
+      "externalErrorMode": "Action too much",
+      "recovery": "Auto-cutout",
+      "consequence": "Overspeed",
+      "humanErrorType": "Skill-based slip",
+      "psf": ["Interface"],
+      "comments": ""
+    },
+    {
+      "id": "r2",
+      "taskId": "1.1",
+      "externalErrorMode": "Action too late",
+      "recovery": "Driver prompt",
+      "consequence": "Late arrival",
+      "humanErrorType": "Rule-based mistake",
+      "psf": ["Procedures"],
+      "comments": ""
+    },
+    {
+      "id": "r3",
+      "taskId": "1.2",
+      "externalErrorMode": "Omission",
+      "recovery": "Signal alert",
+      "consequence": "Signal passed",
+      "humanErrorType": "Lapse",
+      "psf": ["Environment"],
+      "comments": ""
+    }
+  ]
+}
