@@ -51,6 +51,8 @@ def main() -> int:
         assert_contains("HTA.html", html, 'src="scripts/hta-app.js"')
         assert_contains("HTA.html", html, 'id="ttaTable"')
         assert_contains("HTA.html", html, 'id="columnPicker"')
+        assert_contains("HTA.html", html, 'id="htaViewport"')
+        assert_contains("HTA.html", html, 'id="splitResizer"')
         assert_contains("HTA.html", html, 'class="hta-header"')
         assert_contains("HTA.html", html, "<h2>HTA</h2>")
         assert_contains("HTA.html", html, "<h2>TTA</h2>")
@@ -58,6 +60,8 @@ def main() -> int:
         assert_contains("HTA.html", html, 'data-action="addSibling"')
         assert_contains("HTA.html", html, 'data-action="duplicateTask"')
         assert_contains("HTA.html", html, 'data-action="toggleColumnPicker"')
+        assert_contains("HTA.html", html, 'data-action="exportTtaCsv"')
+        assert_contains("HTA.html", html, "Export CSV")
         assert_not_contains("HTA.html", html, 'id="textInput"')
         assert_not_contains("HTA.html", html, "Delete task")
 
@@ -71,12 +75,32 @@ def main() -> int:
             "function deleteSelectedTask",
             "function reassignIdsAndRemapTta",
             "function highlightTtaForTask",
+            "function moveSelectedAmongSiblings",
+            "function outdentSelected",
+            "function indentSelected",
+            "function handleSelectedArrow",
+            "function ensureTtaCoversAllTasks",
+            "function emptyTtaRecord",
             "function toggleColumnPicker",
+            "function buildTtaCsv",
+            "function exportTtaCsv",
+            "function loadSplitPct",
+            "function setSpacePanArmed",
+            "function undoState",
+            "function redoState",
+            "function recordStateHistory",
             'DIAGRAM_VERSION = 2',
             'a.download = "hta-tta.json"',
+            'a.download = "hta-tta.csv"',
             "window.HTAEditor",
         ):
             assert_contains("hta-app.js", js, name)
+        assert_contains("HTA.html", html, 'data-shortcut="c"')
+        assert_contains("HTA.html", html, 'data-shortcut="s"')
+        assert_contains("HTA.html", html, 'data-shortcut="d"')
+        assert_not_contains("HTA.html", html, 'data-shortcut="l"')
+        assert_contains("hta-app.js", js, "Outline")
+        assert_contains("hta-app.js", js, '\\uFEFF')
 
     def test_sample_fixture() -> None:
         raw = json.loads(SAMPLE.read_text(encoding="utf-8"))

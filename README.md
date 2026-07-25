@@ -1,48 +1,143 @@
-# HTA Tool - Hierarchical Task Analysis Editor & Viewer
+# HTA Tool — Hierarchical Task Analysis + TTA
 
-This project contains tools for creating and visualizing Hierarchical Task Analysis (HTA) diagrams, along with Penpot MCP (Model Context Protocol) server integration for design interaction.
+Tools for creating and visualizing Hierarchical Task Analysis (HTA) diagrams with Tabular Task Analysis (TTA / HEI fields).
 
-## HTA + TTA Editor (`HTA.html`) — current
+## HTA + TTA Editor (`HTA.html`)
 
-State-driven editor aligned with Penpot **HFA DS → TTA draft**: HTML shell + [`scripts/hta-app.js`](scripts/hta-app.js).
+Primary editor. Open [`HTA.html`](HTA.html) in a modern browser — no build step. Logic lives in [`scripts/hta-app.js`](scripts/hta-app.js). Design reference: Penpot **HFA DS → TTA draft**.
 
-- **Left:** HTA hierarchy (Description editSession, keyboard nav, Add child / sibling / Duplicate; Delete/Backspace)
-- **Right:** TTA table (RSSB HEI columns, column picker, selection sync with HTA)
-- JSON **Export** / **Import** includes both tree and `ttaRecords` (`hta-tta.json`)
-- Light/dark theme; smoke: `python3 scripts/hta-smoke-test.py`
+### Layout
 
-Open [`HTA.html`](HTA.html) in a browser — no build step.
+| Panel | Role |
+| --- | --- |
+| **HTA** (left) | Hierarchy tree — source of truth for tasks and IDs |
+| **TTA** (right) | Table of HEI fields linked to tasks by `taskId` |
 
-Previous text-panel editor: [`hta-editor2.html`](hta-editor2.html) + [`scripts/hta-editor-app.js`](scripts/hta-editor-app.js). Legacy: [`hta-editor.html`](hta-editor.html).
+Selecting a task in HTA highlights matching TTA rows (and the reverse). Every HTA task always has at least one TTA row.
+
+### Getting started
+
+1. Open `HTA.html` in a browser.
+2. Click a task to select it (IDs are display-only).
+3. Click the **description** (or press **Enter** when focused) to edit the title; **Enter** applies, **Esc** cancels.
+4. Use toolbar buttons or shortcuts to grow the tree.
+5. Fill HEI cells in the TTA table; use **Add row** for extra HEI rows on the selected task.
+6. **Export** saves full state as JSON; **Export CSV** (TTA toolbar) saves Excel/SmartArt-friendly CSV.
+
+Sample data: [`fixtures/hta-tta-sample.json`](fixtures/hta-tta-sample.json) — use top-bar **Import**.
+
+### Toolbar
+
+| Control | What it does |
+| --- | --- |
+| Light / Dark | Theme |
+| Export | Download `hta-tta.json` (HTA tree + all TTA records) |
+| Import | Load a versioned JSON file |
+| + Child (**C**) | Add child under selected task |
+| + Sibling (**S**) | Add sibling after selected task |
+| + Duplicate (**D**) | Duplicate selected task (subtree + TTA) |
+
+Drag the vertical gutter between HTA and TTA to resize panels (saved in `localStorage`). On the HTA canvas, hold **Space** and drag to pan (hand cursor), like Penpot/Figma.
+
+### TTA toolbar
+
+| Control | What it does |
+| --- | --- |
+| Columns | Show/hide HEI columns (prefs stored in `localStorage`) |
+| Filter | Reserved (not yet wired) |
+| Export CSV | Download `hta-tta.csv` for Excel / SmartArt |
+| Add row | Extra HEI row for the selected task |
+
+### Keyboard
+
+| Keys | Action |
+| --- | --- |
+| **Space** + drag | Pan the HTA canvas (hand tool) |
+| **⌘Z** / **Ctrl+Z** | Undo |
+| **⌘⇧Z** / **Ctrl+Shift+Z** (or **Ctrl+Y**) | Redo |
+| **↑** | Hover: move to parent (e.g. 1.1.2 → 1.1 → root). Selected: reorder among siblings |
+| **↓** | Hover: next task in tree order. Selected: reorder among siblings |
+| **←** | Outdent selected task |
+| **→** | Indent selected task under previous sibling |
+| **C** / **S** / **D** | Child / Sibling / Duplicate |
+| **Delete** / **Backspace** | Delete selected task (not root) |
+| **Enter** | Start / apply description edit |
+| **Esc** | Cancel edit, or clear selection / close column picker |
+
+Hover a task for keyboard focus without selecting; click to select.
+
+### Export CSV (Excel / SmartArt)
+
+TTA **Export CSV** writes UTF-8 CSV (BOM) with columns:
+
+`Depth`, `ID`, `Title`, `Outline`, then HEI fields (External Error Mode, Recovery, Consequence, Human Error Type, PSFs, Comments).
+
+**Outline** is tab-indented with the full hierarchical ID written out, e.g.:
+
+```
+1 Operate Train
+	1.1 Set Speed
+	1.2 Apply Brake
+```
+
+Open in Excel, or copy the **Outline** column into Word/PowerPoint as a multilevel list and convert to SmartArt.
+
+### JSON schema (Import / Export)
+
+Version **2** includes `ttaRecords` and column meta:
+
+```json
+{
+  "version": 2,
+  "meta": {
+    "theme": "light",
+    "columns": [
+      { "id": "taskStep", "label": "Task Step", "visible": true, "order": 0 }
+    ]
+  },
+  "root": {
+    "id": "1",
+    "title": "Root Task",
+    "level": 0,
+    "children": [
+      { "id": "1.1", "title": "Child", "level": 1, "children": [] }
+    ]
+  },
+  "ttaRecords": [
+    {
+      "id": "r1",
+      "taskId": "1.1",
+      "externalErrorMode": "",
+      "recovery": "",
+      "consequence": "",
+      "humanErrorType": "",
+      "psf": [],
+      "comments": ""
+    }
+  ]
+}
+```
+
+### Smoke test
+
+```bash
+python3 scripts/hta-smoke-test.py
+```
+
+---
 
 ## HTA Editor (`hta-editor2.html`) — text-panel reference
 
-State-driven editor (Bowtie-style): HTML shell + [`scripts/hta-editor-app.js`](scripts/hta-editor-app.js). The **task tree is the source of truth**; the text panel is a synced authoring view.
+Earlier state-driven editor (Bowtie-style text panel): [`hta-editor2.html`](hta-editor2.html) + [`scripts/hta-editor-app.js`](scripts/hta-editor-app.js). Tree is source of truth; text panel is a synced authoring view.
 
-Features:
-- Text-based input with tab indentation (press Tab to indent)
-- Visual hierarchy with orthogonal connectors (`commit` → `render` → connectors)
-- Undo/Redo (Ctrl/Cmd+Z / Ctrl/Cmd+Y)
-- Line selection with Shift+Arrow Up/Down
-- Tab/Shift+Tab for indentation of selected lines
-- Auto-update hierarchy 3 seconds after typing stops
-- Click tasks to select the matching text line by **stable task id**
-- Light/dark theme (L / D)
-- JSON **Export** / **Import** with validation (LLM-friendly error messages)
-- Offline smoke tests: `python3 scripts/hta-editor-smoke-test.py`
+- Tab-indented text input; auto-commit after idle
+- Undo/Redo (Ctrl/Cmd+Z / Y); Shift+Arrow line selection
+- JSON Export/Import (version 1 schema, no TTA)
+- Smoke: `python3 scripts/hta-editor-smoke-test.py`
 
-Legacy reference (DOM/text dual-store, unchanged): [`hta-editor.html`](hta-editor.html)
+Legacy: [`hta-editor.html`](hta-editor.html). Design file: `HTA.penpot`.
 
-## Getting Started
-
-Open `hta-editor2.html` in any modern browser — no build step.
-
-1. Enter your task hierarchy in the text panel using tabs for indentation
-2. The diagram updates automatically after 3 seconds (via `commit`)
-3. Click any task in the diagram to jump to its text line
-4. Use **Export** / **Import** for versioned JSON (`fixtures/hta-sample.json`)
-
-### Example Format
+### Example text format (editor2)
 
 ```
 Root Task
@@ -51,135 +146,3 @@ Root Task
 		Sub-subtask 1.2
 	Subtask 2
 ```
-
-### JSON schema (import/export)
-
-```json
-{
-  "version": 1,
-  "meta": { "theme": "light" },
-  "root": {
-    "id": "1",
-    "title": "Root Task",
-    "children": [
-      { "id": "1.1", "title": "Child", "children": [] }
-    ]
-  }
-}
-```
-
-Import validation rejects non-object nodes and non-array `children` (see `fixtures/hta-broken.json`).
-
-### Penpot Design File
-
-The repository includes `HTA.penpot` - a Penpot design file with an example HTA diagram. You can:
-- Open it in [Penpot](https://penpot.app) to view and edit the design
-- Use it as a template for creating professional HTA diagrams
-- Collaborate with others on HTA designs
-
----
-
-## Penpot MCP Server Setup
-
-This project is also configured to use the Penpot MCP server, which allows AI tools like Cursor to interact with your Penpot designs.
-
-## Setup Instructions
-
-### 1. Install the Penpot MCP Server
-
-The easiest way is to use `uvx` (comes with uv):
-
-```bash
-# Install uv if you don't have it
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# The server will be automatically installed when configured
-```
-
-Alternatively, you can install via pip:
-
-```bash
-pip install penpot-mcp
-```
-
-### 2. Configure Your Credentials
-
-#### Option A: Using Environment Variables (Recommended)
-
-1. Copy the example environment file:
-   ```bash
-   cp env.template .env
-   ```
-
-2. Edit `.env` and add your actual Penpot credentials:
-   ```
-   PENPOT_API_URL=https://design.penpot.app/api
-   PENPOT_USERNAME=your_actual_username
-   PENPOT_PASSWORD=your_actual_password
-   ```
-
-#### Option B: Using MCP Configuration File
-
-1. Copy the template configuration:
-   ```bash
-   cp mcp-config.template.json mcp-config.json
-   ```
-
-2. Edit `mcp-config.json` and add your Penpot token:
-   ```json
-   {
-     "mcpServers": {
-       "penpot": {
-         "command": "uvx",
-         "args": ["penpot-mcp"],
-         "env": {
-           "PENPOT_API_URL": "https://design.penpot.app/api",
-           "PENPOT_TOKEN": "your_actual_penpot_token_here"
-         }
-       }
-     }
-   }
-   ```
-
-#### Option C: Configure in Cursor Settings
-
-1. Open Cursor Settings
-2. Navigate to MCP Servers configuration
-3. Add the configuration manually in Cursor's settings
-
-### 3. Restart Cursor
-
-After configuration, restart Cursor to load the MCP server.
-
-## Usage
-
-Once configured, you can interact with your Penpot designs directly in Cursor by asking questions like:
-
-- "Show me all projects in my Penpot account"
-- "Analyze the design components in project X"
-- "Export the main button component as an image"
-- "What design patterns are used in this file?"
-
-## Penpot Account
-
-If you don't have a Penpot account yet:
-- Sign up at [https://penpot.app](https://penpot.app)
-- Or use the self-hosted version if your organization has one
-
-## Security Note
-
-⚠️ **IMPORTANT: Protect Your Credentials!**
-
-Never commit sensitive files to version control:
-- `.env` - Contains your credentials and tokens
-- `mcp-config.json` - Contains your Penpot token
-- Any other files with passwords or API keys
-
-The `.gitignore` file is configured to exclude these files automatically. Only the template files (`env.template` and `mcp-config.template.json`) are tracked in git - these are safe to share as they don't contain actual credentials.
-
-## Resources
-
-- [Penpot MCP GitHub Repository](https://github.com/montevive/penpot-mcp)
-- [Penpot Official Documentation](https://help.penpot.app)
-- [Model Context Protocol Specification](https://modelcontextprotocol.io)
-

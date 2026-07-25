@@ -1,0 +1,207 @@
+{
+  "version": 2,
+  "meta": {
+    "theme": "light",
+    "columns": [
+      {
+        "id": "taskStep",
+        "label": "Task Step",
+        "visible": true,
+        "order": 0
+      },
+      {
+        "id": "externalErrorMode",
+        "label": "External Error Mode",
+        "visible": true,
+        "order": 1
+      },
+      {
+        "id": "recovery",
+        "label": "Recovery",
+        "visible": true,
+        "order": 2
+      },
+      {
+        "id": "consequence",
+        "label": "Consequence",
+        "visible": true,
+        "order": 3
+      },
+      {
+        "id": "humanErrorType",
+        "label": "Human Error Type",
+        "visible": true,
+        "order": 4
+      },
+      {
+        "id": "psf",
+        "label": "PSFs",
+        "visible": true,
+        "order": 5
+      },
+      {
+        "id": "comments",
+        "label": "Comments",
+        "visible": true,
+        "order": 6
+      }
+    ]
+  },
+  "root": {
+    "id": "1",
+    "title": "Operate Train",
+    "level": 0,
+    "children": [
+      {
+        "id": "1.1",
+        "title": "Regulate Speed",
+        "level": 1,
+        "children": []
+      },
+      {
+        "id": "1.2",
+        "title": "Maintain Situational Awareness",
+        "level": 1,
+        "children": [
+          {
+            "id": "1.2.1",
+            "title": "Monitor ETCS DMI Panel",
+            "level": 2,
+            "children": []
+          },
+          {
+            "id": "1.2.2",
+            "title": "Observe Track Ahead and External Signals",
+            "level": 2,
+            "children": []
+          }
+        ]
+      },
+      {
+        "id": "1.3",
+        "title": "Apply Service Braking",
+        "level": 1,
+        "children": []
+      }
+    ]
+  },
+  "ttaRecords": [
+    {
+      "id": "r1",
+      "taskId": "1.1",
+      "externalErrorMode": "Action too much",
+      "recovery": "ETCS automatic traction cutout & warning alert",
+      "consequence": "Overspeed triggering Permitted Speed (P-Speed) hook",
+      "humanErrorType": "Skill-based slip",
+      "psf": [
+        "Interface Ergonomics",
+        "Workload"
+      ],
+      "comments": "Driver over-throttled while accelerating out of a neutral section."
+    },
+    {
+      "id": "r2",
+      "taskId": "1.1",
+      "externalErrorMode": "Action too late",
+      "recovery": "Driver manual throttle notch back upon crossing speed board",
+      "consequence": "Minor speed restriction violation, schedule delay",
+      "humanErrorType": "Rule-based mistake",
+      "psf": [
+        "Procedures",
+        "Time Pressure"
+      ],
+      "comments": "Driver misjudged deceleration distance needed for heavy freight trailing load."
+    },
+    {
+      "id": "r3",
+      "taskId": "1.3",
+      "externalErrorMode": "Omission",
+      "recovery": "ETCS automatic full service brake application",
+      "consequence": "Risk of SPAD (Signal Passed At Danger) or overshoot of movement authority",
+      "humanErrorType": "Lapse",
+      "psf": [
+        "Fatigue / Vigilance",
+        "Adverse Weather"
+      ],
+      "comments": "Driver missed braking point due to reduced visibility and distraction."
+    },
+    {
+      "id": "rmrxlrbsl1",
+      "taskId": "1",
+      "externalErrorMode": "Wrong action",
+      "recovery": "Signalling center intervention via GSM-R call",
+      "consequence": "Unplanned train stop on mainline corridor, minor network delay",
+      "humanErrorType": "Knowledge-based mistake",
+      "psf": [
+        "Training",
+        "Procedure Complexity"
+      ],
+      "comments": "Misinterpretation of degraded mode rules during emergency bypass authorization."
+    },
+    {
+      "id": "rmrxlt6uf2",
+      "taskId": "1.2",
+      "externalErrorMode": "Omission",
+      "recovery": "Driver Safety Device (DSD) / Deadman's pedal alarm",
+      "consequence": "Delayed recognition of restrictive signal aspect ahead",
+      "humanErrorType": "Lapse",
+      "psf": [
+        "Monotony / Boredom",
+        "Circadian Rhythm"
+      ],
+      "comments": "Lapse in visual scanning routine during long night shift passage."
+    },
+    {
+      "id": "rmrxlxakz5",
+      "taskId": "1.2.1",
+      "externalErrorMode": "Misinterpretation",
+      "recovery": "Visual re-check triggered by ETCS audio chime",
+      "consequence": "Inappropriate target speed selection relative to Movement Authority (MA)",
+      "humanErrorType": "Rule-based mistake",
+      "psf": [
+        "DMI Screen Glare",
+        "Display Layout"
+      ],
+      "comments": "Direct sunlight glare on screen caused digit misread on target distance indicator."
+    },
+    {
+      "id": "rmrxlxbyu6",
+      "taskId": "1.2.2",
+      "externalErrorMode": "Action too late",
+      "recovery": "Immediate emergency brake initiation by driver",
+      "consequence": "Reduced safety buffer before hazardous track condition or signal",
+      "humanErrorType": "Skill-based slip",
+      "psf": [
+        "Low Visibility",
+        "Heavy Rain"
+      ],
+      "comments": "Heavy downpour restricted sightline distance to physical wayside boards."
+    },
+    {
+      "id": "rmrxmxpjj2",
+      "taskId": "1.2.2",
+      "externalErrorMode": "Omission",
+      "recovery": "Signaller warning broadcast over GSM-R cab radio",
+      "consequence": "Entering temporary speed restriction (TSR) zone at normal track speed",
+      "humanErrorType": "Lapse",
+      "psf": [
+        "Distraction",
+        "High Cab Noise"
+      ],
+      "comments": "Driver distracted by secondary radio communication while approaching TSR marker."
+    },
+    {
+      "id": "rmrxmxudm3",
+      "taskId": "1.2.2",
+      "externalErrorMode": "Action too early",
+      "recovery": "Rapid brake re-application upon observing signal state",
+      "consequence": "Breach of approach-control speed profile",
+      "humanErrorType": "Rule-based mistake",
+      "psf": [
+        "Expectancy Bias",
+        "Time Pressure"
+      ],
+      "comments": "Driver anticipated signal clearing based on daily routine timetable."
+    }
+  ]
+}

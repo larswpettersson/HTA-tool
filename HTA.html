@@ -120,20 +120,23 @@
 
     .main-content {
       display: flex;
-      gap: 16px;
-      align-items: flex-start;
+      gap: 0;
+      align-items: stretch;
+      min-height: calc(100vh - 140px);
     }
 
     .hierarchy-container {
-      flex: 0 1 42%;
-      min-width: 280px;
-      overflow: auto;
+      flex: 0 0 var(--hta-split, 42%);
+      width: var(--hta-split, 42%);
+      min-width: 220px;
+      max-width: calc(100% - 240px);
+      overflow: hidden;
       background: var(--color-background-elevated);
-      border-radius: var(--card-radius);
+      border-radius: var(--card-radius) 0 0 var(--card-radius);
       max-height: calc(100vh - 140px);
       display: flex;
       flex-direction: column;
-      padding: 16px;
+      padding: 16px 16px 0;
       gap: 12px;
     }
 
@@ -144,6 +147,7 @@
       gap: 12px;
       flex-wrap: wrap;
       flex-shrink: 0;
+      padding-bottom: 0;
     }
 
     .hta-header h2 {
@@ -151,12 +155,77 @@
       font-weight: 600;
     }
 
+    .hta-viewport {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding: 0 0 16px;
+      cursor: default;
+      overscroll-behavior: contain;
+    }
+
+    .hta-viewport.is-space-pan {
+      cursor: grab;
+    }
+
+    .hta-viewport.is-space-pan .task,
+    .hta-viewport.is-space-pan .desc-text {
+      cursor: grab;
+    }
+
+    .hta-viewport.is-panning {
+      cursor: grabbing;
+      user-select: none;
+    }
+
+    .hta-viewport.is-panning .task,
+    .hta-viewport.is-panning .desc-text {
+      cursor: grabbing;
+      pointer-events: none;
+    }
+
     .hierarchy {
       padding: 44px 44px 60px;
       min-height: 600px;
       min-width: fit-content;
       position: relative;
-      flex: 1;
+    }
+
+    .split-resizer {
+      flex: 0 0 8px;
+      width: 8px;
+      margin: 0 4px;
+      border-radius: 4px;
+      background: transparent;
+      cursor: col-resize;
+      position: relative;
+      align-self: stretch;
+      touch-action: none;
+    }
+
+    .split-resizer::before {
+      content: "";
+      position: absolute;
+      top: 12px;
+      bottom: 12px;
+      left: 2px;
+      right: 2px;
+      border-radius: 2px;
+      background: color-mix(in srgb, var(--color-foreground) 18%, transparent);
+    }
+
+    .split-resizer:hover::before,
+    .split-resizer.is-dragging::before {
+      background: var(--color-accent);
+    }
+
+    body.is-split-resizing {
+      cursor: col-resize;
+      user-select: none;
+    }
+
+    body.is-split-resizing * {
+      cursor: col-resize !important;
     }
 
     .task {
@@ -272,10 +341,10 @@
     /* ---------- TTA panel ---------- */
 
     .tta-panel {
-      flex: 1 1 58%;
-      min-width: 0;
+      flex: 1 1 0;
+      min-width: 220px;
       background: var(--color-background-elevated);
-      border-radius: var(--card-radius);
+      border-radius: 0 var(--card-radius) var(--card-radius) 0;
       padding: 16px;
       max-height: calc(100vh - 140px);
       display: flex;
@@ -432,13 +501,17 @@
     }
 
     @media (max-width: 960px) {
-      .main-content { flex-direction: column; }
+      .main-content { flex-direction: column; gap: 16px; }
       .hierarchy-container,
       .tta-panel {
         flex: 1 1 auto;
-        width: 100%;
+        width: 100% !important;
+        max-width: none;
         max-height: none;
+        border-radius: var(--card-radius);
       }
+      .hierarchy-container { padding: 16px; }
+      .split-resizer { display: none; }
     }
   </style>
 </head>
@@ -446,31 +519,48 @@
   <div class="container">
     <div class="header">
       <div class="toolbar">
-        <button type="button" class="action-btn" data-action="setThemeLight" data-shortcut="l" title="Light mode (L)">
-          <span class="ul">L</span><span>ight</span>
+        <button type="button" class="action-btn" data-action="setThemeLight" title="Light mode">
+          Light
         </button>
-        <button type="button" class="action-btn" data-action="setThemeDark" data-shortcut="d" title="Dark mode (D)">
-          <span class="ul">D</span><span>ark</span>
+        <button type="button" class="action-btn" data-action="setThemeDark" title="Dark mode">
+          Dark
         </button>
         <button type="button" class="action-btn" data-action="exportState" title="Export HTA+TTA JSON">Export</button>
         <button type="button" class="action-btn" data-action="importState" title="Import JSON">Import</button>
-        <button type="button" class="action-btn" data-action="addChild" title="Add child under selected/hovered task">Add child</button>
-        <button type="button" class="action-btn" data-action="addSibling" title="Add sibling after selected/hovered task">Add sibling</button>
-        <button type="button" class="action-btn" data-action="duplicateTask" title="Duplicate task and subtree">Duplicate</button>
+        <button type="button" class="action-btn" data-action="addChild" data-shortcut="c" title="Add child (C)">
+          + <span class="btn-label"><span class="ul">C</span>hild</span>
+        </button>
+        <button type="button" class="action-btn" data-action="addSibling" data-shortcut="s" title="Add sibling (S)">
+          + <span class="btn-label"><span class="ul">S</span>ibling</span>
+        </button>
+        <button type="button" class="action-btn" data-action="duplicateTask" data-shortcut="d" title="Duplicate (D)">
+          + <span class="btn-label"><span class="ul">D</span>uplicate</span>
+        </button>
         <input type="file" id="import-state-file" accept=".json,application/json" hidden />
-        <span class="help-text">↑↓ hover · ←→ siblings · select+←→ reorder · Del delete · Enter edit</span>
+        <span class="help-text">Space+drag pan · ⌘Z undo · ⌘⇧Z redo · ↑ parent · ↓ next · C/S/D · Del</span>
       </div>
     </div>
 
-    <div class="main-content">
-      <div class="hierarchy-container">
+    <div class="main-content" id="mainContent">
+      <div class="hierarchy-container" id="htaPanel">
         <div class="hta-header">
           <h2>HTA</h2>
         </div>
-        <div class="hierarchy" id="hierarchy" aria-label="HTA hierarchy">
-          <svg class="connectors" id="connectors" aria-hidden="true"></svg>
+        <div class="hta-viewport" id="htaViewport">
+          <div class="hierarchy" id="hierarchy" aria-label="HTA hierarchy">
+            <svg class="connectors" id="connectors" aria-hidden="true"></svg>
+          </div>
         </div>
       </div>
+
+      <div
+        class="split-resizer"
+        id="splitResizer"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize HTA and TTA panels"
+        tabindex="0"
+      ></div>
 
       <div class="tta-panel" id="ttaPanel">
         <div class="tta-header">
@@ -478,7 +568,7 @@
           <div class="tta-toolbar">
             <button type="button" class="action-btn" data-action="toggleColumnPicker" title="Show or hide columns">Columns</button>
             <button type="button" class="action-btn" disabled title="Filter (coming later)">Filter</button>
-            <button type="button" class="action-btn" data-action="exportState" title="Export HTA+TTA JSON">Export</button>
+            <button type="button" class="action-btn" data-action="exportTtaCsv" title="Export TTA as CSV for Excel / SmartArt">Export CSV</button>
             <button type="button" class="action-btn" data-action="addTtaRow" title="Add HEI row for selected task">Add row</button>
           </div>
         </div>
@@ -501,8 +591,12 @@
     </div>
 
     <p class="hint">
-      HTA tree is the source of truth; TTA rows attach HEI fields by <code>taskId</code>.
-      Design: HFA DS <code>TTA draft</code>. Smoke: <code>python3 scripts/hta-smoke-test.py</code>
+      Keyboard: <kbd>Space</kbd>+drag pan · <kbd>⌘Z</kbd> undo · <kbd>⌘⇧Z</kbd> redo ·
+      <kbd>↑</kbd> parent · <kbd>↓</kbd> next ·
+      <kbd>←</kbd><kbd>→</kbd> siblings (selected: outdent/indent) ·
+      <kbd>C</kbd> child · <kbd>S</kbd> sibling · <kbd>D</kbd> duplicate ·
+      <kbd>Del</kbd> delete · <kbd>Enter</kbd> edit description · <kbd>Esc</kbd> clear selection
+      (letter shortcuts off while typing)
     </p>
   </div>
 

@@ -5,6 +5,10 @@
   const UPDATE_DEBOUNCE_MS = 3000;
   const HISTORY_LIMIT = 100;
   const COLUMN_STORAGE_KEY = "hta-tta-columns";
+  const SPLIT_STORAGE_KEY = "hta-tta-split-pct";
+  const SPLIT_DEFAULT_PCT = 42;
+  const SPLIT_MIN_PCT = 20;
+  const SPLIT_MAX_PCT = 75;
 
   const DEFAULT_COLUMNS = [
     { id: "taskStep", label: "Task Step", visible: true, order: 0 },
@@ -35,13 +39,24 @@
   const ttaTbody = document.getElementById("ttaTbody");
   const columnPicker = document.getElementById("columnPicker");
   const columnPickerList = document.getElementById("columnPickerList");
+  const htaPanel = document.getElementById("htaPanel");
+  const htaViewport = document.getElementById("htaViewport");
+  const splitResizer = document.getElementById("splitResizer");
+  const mainContent = document.getElementById("mainContent");
 
   let state = null;
   const ui = { selectedTaskId: null, keyboardHoverId: null };
+  let spacePanArmed = false;
+  let isPanning = false;
+  let panLast = { x: 0, y: 0 };
+  let ignoreClickAfterPan = false;
+  let isSplitResizing = false;
   const taskElements = new Map();
 
   let history = [];
   let historyIndex = 0;
+  let stateHistory = [];
+  let stateHistoryIndex = -1;
   let isUndoRedo = false;
   let selectionAnchor = null;
   let currentLinePosition = null;
@@ -578,6 +593,7 @@
     }
     applySelectionUI();
     applyKeyboardHoverUI();
+    taskEl.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
 
   function getTaskElsInOrder() {
@@ -589,18 +605,31 @@
   function navigateTasks(key) {
     const tasks = getTaskElsInOrder();
     if (!tasks.length) return;
-    const current =
-      document.querySelector(".task.is-keyboard-hover") ||
-      (ui.selectedTaskId ? taskElements.get(ui.selectedTaskId) : null);
-    let index = current ? tasks.indexOf(current) : -1;
+    const hoverId =
+      ui.keyboardHoverId ||
+      document.querySelector(".task.is-keyboard-hover")?.dataset.taskId ||
+      null;
+
+    // Hover ↑: jump to parent (e.g. 1.1.2 → 1.1 → root). Stay put on root.
     if (key === "ArrowUp") {
-      index = index <= 0 ? 0 : index - 1;
-    } else if (key === "ArrowDown") {
-      index = index < 0 ? 0 : Math.min(tasks.length - 1, index + 1);
-    } else {
+      if (!hoverId) {
+        setKeyboardNavTarget(tasks[0], { select: false });
+        return;
+      }
+      const parent = findParentOf(state.root, hoverId);
+      if (!parent) return;
+      const parentEl = taskElements.get(parent.id);
+      if (parentEl) setKeyboardNavTarget(parentEl, { select: false });
       return;
     }
-    setKeyboardNavTarget(tasks[index], { select: false });
+
+    // Hover ↓: next task in tree order (into first child, then siblings, etc.)
+    if (key === "ArrowDown") {
+      const current = hoverId ? taskElements.get(hoverId) : null;
+      let index = current ? tasks.indexOf(current) : -1;
+      index = index < 0 ? 0 : Math.min(tasks.length - 1, index + 1);
+      setKeyboardNavTarget(tasks[index], { select: false });
+    }
   }
 
   /** Hover: ←→ move keyboard hover among siblings (same level). */
@@ -617,7 +646,7 @@
     return true;
   }
 
-  /** Selected: ←→ reorder task + subtree among siblings at same level. */
+  /** Selected: ↑↓ reorder among siblings (subtree moves with the task). */
   function moveSelectedAmongSiblings(direction) {
     const selectedId = ui.selectedTaskId;
     if (!selectedId || !state?.root) return false;
@@ -638,10 +667,74 @@
     return true;
   }
 
+  /**
+   * Selected ← : outdent — become next sibling of current parent
+   * (subtree stays attached). No-op for root or top-level children.
+   */
+  function outdentSelected() {
+    const selectedId = ui.selectedTaskId;
+    if (!selectedId || !state?.root || selectedId === state.root.id) return false;
+    let movedNode = null;
+    commit((s) => {
+      const parent = findParentOf(s.root, selectedId);
+      if (!parent || parent === s.root) return;
+      const grandparent = findParentOf(s.root, parent.id);
+      if (!grandparent) return;
+      const node = findTask(s.root, selectedId);
+      if (!node) return;
+      const pIdx = parent.children.findIndex((c) => c.id === selectedId);
+      if (pIdx < 0) return;
+      parent.children.splice(pIdx, 1);
+      const gIdx = grandparent.children.findIndex((c) => c.id === parent.id);
+      if (gIdx < 0) return;
+      grandparent.children.splice(gIdx + 1, 0, node);
+      movedNode = node;
+      reassignIdsAndRemapTta(s);
+      ui.selectedTaskId = movedNode.id;
+    });
+    if (!movedNode) return false;
+    selectTask(movedNode.id, { skipTextFocus: true });
+    return true;
+  }
+
+  /**
+   * Selected → : indent — become last child of previous sibling
+   * (subtree stays attached).
+   */
+  function indentSelected() {
+    const selectedId = ui.selectedTaskId;
+    if (!selectedId || !state?.root || selectedId === state.root.id) return false;
+    let movedNode = null;
+    commit((s) => {
+      const ctx = getSiblingContext(s.root, selectedId);
+      if (!ctx || ctx.index <= 0) return;
+      const node = ctx.siblings[ctx.index];
+      const prev = ctx.siblings[ctx.index - 1];
+      ctx.siblings.splice(ctx.index, 1);
+      if (!prev.children) prev.children = [];
+      prev.children.push(node);
+      movedNode = node;
+      reassignIdsAndRemapTta(s);
+      ui.selectedTaskId = movedNode.id;
+    });
+    if (!movedNode) return false;
+    selectTask(movedNode.id, { skipTextFocus: true });
+    return true;
+  }
+
+  function handleSelectedArrow(key) {
+    if (!ui.selectedTaskId) return false;
+    if (key === "ArrowUp") return moveSelectedAmongSiblings(-1);
+    if (key === "ArrowDown") return moveSelectedAmongSiblings(1);
+    if (key === "ArrowLeft") return outdentSelected();
+    if (key === "ArrowRight") return indentSelected();
+    return false;
+  }
+
   function handleHorizontalArrow(key) {
+    if (ui.selectedTaskId) return handleSelectedArrow(key);
     const direction = key === "ArrowLeft" ? -1 : key === "ArrowRight" ? 1 : 0;
     if (!direction) return false;
-    if (ui.selectedTaskId) return moveSelectedAmongSiblings(direction);
     if (ui.keyboardHoverId) return navigateSiblingHover(direction);
     return false;
   }
@@ -802,14 +895,43 @@
     }
   }
 
+  function emptyTtaRecord(taskId) {
+    return {
+      id: newRecordId(),
+      taskId,
+      externalErrorMode: "",
+      recovery: "",
+      consequence: "",
+      humanErrorType: "",
+      psf: [],
+      comments: "",
+    };
+  }
+
+  /** Every HTA task appears in TTA (≥1 row); drop orphan records. */
+  function ensureTtaCoversAllTasks(s) {
+    if (!s?.root) return;
+    if (!Array.isArray(s.ttaRecords)) s.ttaRecords = [];
+    const tasks = collectLineMap(s.root);
+    const ids = new Set(tasks.map((t) => t.id));
+    s.ttaRecords = s.ttaRecords.filter((r) => ids.has(r.taskId));
+    const have = new Set(s.ttaRecords.map((r) => r.taskId));
+    tasks.forEach((t) => {
+      if (!have.has(t.id)) {
+        s.ttaRecords.push(emptyTtaRecord(t.id));
+        have.add(t.id);
+      }
+    });
+  }
+
   function orderedTtaRows() {
     if (!state?.root) return [];
     const order = new Map();
     collectLineMap(state.root).forEach((entry, i) => order.set(entry.id, i));
-    const records = [...(state.ttaRecords || [])];
+    const records = [...(state.ttaRecords || [])].filter((r) => order.has(r.taskId));
     records.sort((a, b) => {
-      const oa = order.has(a.taskId) ? order.get(a.taskId) : Number.MAX_SAFE_INTEGER;
-      const ob = order.has(b.taskId) ? order.get(b.taskId) : Number.MAX_SAFE_INTEGER;
+      const oa = order.get(a.taskId);
+      const ob = order.get(b.taskId);
       if (oa !== ob) return oa - ob;
       return String(a.id).localeCompare(String(b.id));
     });
@@ -856,10 +978,18 @@
           td.textContent = taskRefFor(rec.taskId);
         } else if (col.id === "externalErrorMode") {
           const sel = document.createElement("select");
-          sel.innerHTML = EXTERNAL_ERROR_MODES.map(
-            (m) =>
-              `<option value="${m}"${m === rec.externalErrorMode ? " selected" : ""}>${m}</option>`
-          ).join("");
+          const blank = document.createElement("option");
+          blank.value = "";
+          blank.textContent = "—";
+          if (!rec.externalErrorMode) blank.selected = true;
+          sel.appendChild(blank);
+          EXTERNAL_ERROR_MODES.forEach((m) => {
+            const opt = document.createElement("option");
+            opt.value = m;
+            opt.textContent = m;
+            if (m === rec.externalErrorMode) opt.selected = true;
+            sel.appendChild(opt);
+          });
           if (
             rec.externalErrorMode &&
             !EXTERNAL_ERROR_MODES.includes(rec.externalErrorMode)
@@ -986,17 +1116,71 @@
 
   // ---------- Commit / apply ----------
 
+  function snapshotState() {
+    return JSON.parse(JSON.stringify(serializeState(state)));
+  }
+
+  function resetStateHistory() {
+    if (!state) {
+      stateHistory = [];
+      stateHistoryIndex = -1;
+      return;
+    }
+    stateHistory = [snapshotState()];
+    stateHistoryIndex = 0;
+  }
+
+  function recordStateHistory() {
+    if (isUndoRedo || !state) return;
+    const snap = snapshotState();
+    const prev = stateHistory[stateHistoryIndex];
+    if (prev && JSON.stringify(prev) === JSON.stringify(snap)) return;
+    stateHistory = stateHistory.slice(0, stateHistoryIndex + 1);
+    stateHistory.push(snap);
+    stateHistoryIndex = stateHistory.length - 1;
+    if (stateHistory.length > HISTORY_LIMIT) {
+      stateHistory.shift();
+      stateHistoryIndex -= 1;
+    }
+  }
+
+  function undoState() {
+    if (stateHistoryIndex <= 0) {
+      showStatus("Nothing to undo", "error");
+      return;
+    }
+    isUndoRedo = true;
+    stateHistoryIndex -= 1;
+    applyState(JSON.parse(JSON.stringify(stateHistory[stateHistoryIndex])));
+    isUndoRedo = false;
+    showStatus("Undo", "success");
+  }
+
+  function redoState() {
+    if (stateHistoryIndex < 0 || stateHistoryIndex >= stateHistory.length - 1) {
+      showStatus("Nothing to redo", "error");
+      return;
+    }
+    isUndoRedo = true;
+    stateHistoryIndex += 1;
+    applyState(JSON.parse(JSON.stringify(stateHistory[stateHistoryIndex])));
+    isUndoRedo = false;
+    showStatus("Redo", "success");
+  }
+
   function applyState(next) {
     ui.selectedTaskId = null;
     clearKeyboardHover();
     if (!next.ttaRecords) next.ttaRecords = [];
     if (!next.meta) next.meta = {};
     if (!next.meta.columns) next.meta.columns = DEFAULT_COLUMNS.map((c) => ({ ...c }));
+    ensureTtaCoversAllTasks(next);
     state = next;
     setTheme(state.meta?.theme || "light");
     render(state);
     syncTextPanel();
     updateToolbarEnabled();
+    if (!isUndoRedo) resetStateHistory();
   }
 
   function commit(mutator) {
@@ -1005,11 +1189,13 @@
     if (!state.meta) state.meta = { theme: "light" };
     if (!state.meta.columns) state.meta.columns = DEFAULT_COLUMNS.map((c) => ({ ...c }));
     mutator(state);
+    ensureTtaCoversAllTasks(state);
     const warnings = validateState(state);
     warnings.forEach((w) => console.warn("[HTA]", w));
     render(state);
     syncTextPanel();
     updateToolbarEnabled();
+    recordStateHistory();
   }
 
   function loadState(raw) {
@@ -1303,7 +1489,7 @@
     showStatus("Hierarchy updated", "success");
   }
 
-  function undo() {
+  function undoText() {
     if (historyIndex <= 0) return;
     isUndoRedo = true;
     historyIndex -= 1;
@@ -1312,13 +1498,29 @@
     scheduleCommitFromText();
   }
 
-  function redo() {
+  function redoText() {
     if (historyIndex >= history.length - 1) return;
     isUndoRedo = true;
     historyIndex += 1;
     textInput.value = history[historyIndex];
     isUndoRedo = false;
     scheduleCommitFromText();
+  }
+
+  function undo() {
+    if (textInput && document.activeElement === textInput) {
+      undoText();
+      return;
+    }
+    undoState();
+  }
+
+  function redo() {
+    if (textInput && document.activeElement === textInput) {
+      redoText();
+      return;
+    }
+    redoState();
   }
 
   function getLineStart(text, pos) {
@@ -1349,6 +1551,91 @@
     showStatus("Exported HTA+TTA JSON", "success");
   }
 
+  function csvEscape(value) {
+    const s = String(value ?? "");
+    if (/[",\n\r\t]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+    return s;
+  }
+
+  /**
+   * Excel-friendly CSV with tab-indented Outline for SmartArt:
+   * Depth tabs + full ID + title (e.g. "\t1.1 Set Speed").
+   * One row per TTA record; all HTA tasks included via ensureTtaCoversAllTasks.
+   */
+  function buildTtaCsv(s = state) {
+    if (!s?.root) return "";
+    ensureTtaCoversAllTasks(s);
+    const order = new Map();
+    collectLineMap(s.root).forEach((entry, i) => order.set(entry.id, i));
+    const records = [...(s.ttaRecords || [])].filter((r) => order.has(r.taskId));
+    records.sort((a, b) => {
+      const oa = order.get(a.taskId);
+      const ob = order.get(b.taskId);
+      if (oa !== ob) return oa - ob;
+      return String(a.id).localeCompare(String(b.id));
+    });
+    const headers = [
+      "Depth",
+      "ID",
+      "Title",
+      "Outline",
+      "External Error Mode",
+      "Recovery",
+      "Consequence",
+      "Human Error Type",
+      "PSFs",
+      "Comments",
+    ];
+    const lines = [headers.map(csvEscape).join(",")];
+    records.forEach((rec) => {
+      const node = findTask(s.root, rec.taskId);
+      const id = node?.id || rec.taskId || "";
+      const title = node?.title || "";
+      const depth =
+        typeof node?.level === "number"
+          ? node.level
+          : Math.max(0, String(id).split(".").length - 1);
+      // Tabs encode hierarchy; full ID is written out for SmartArt / Excel
+      const outline = `${"\t".repeat(depth)}${id} ${title}`.trimEnd();
+      lines.push(
+        [
+          depth,
+          id,
+          title,
+          outline,
+          rec.externalErrorMode || "",
+          rec.recovery || "",
+          rec.consequence || "",
+          rec.humanErrorType || "",
+          (rec.psf || []).join("; "),
+          rec.comments || "",
+        ]
+          .map(csvEscape)
+          .join(",")
+      );
+    });
+    return lines.join("\r\n");
+  }
+
+  function exportTtaCsv() {
+    if (!state?.root) {
+      showStatus("Nothing to export", "error");
+      return;
+    }
+    const csv = buildTtaCsv(state);
+    // BOM so Excel recognizes UTF-8
+    const blob = new Blob(["\uFEFF" + csv], {
+      type: "text/csv;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "hta-tta.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+    showStatus("Exported TTA CSV (Excel / SmartArt Outline)", "success");
+  }
+
   function importStateFromFile() {
     importFileInput?.click();
   }
@@ -1359,6 +1646,7 @@
     setThemeLight: () => setTheme("light"),
     setThemeDark: () => setTheme("dark"),
     exportState: () => exportStateToFile(),
+    exportTtaCsv: () => exportTtaCsv(),
     importState: () => importStateFromFile(),
     addChild: () => addChildTask(),
     addSibling: () => addSiblingTask(),
@@ -1394,6 +1682,7 @@
   });
 
   hierarchyEl?.addEventListener("click", (e) => {
+    if (isPanning || spacePanArmed) return;
     if (e.target.id === "hierarchy" || e.target.id === "connectors") {
       clearSelection();
     }
@@ -1403,6 +1692,152 @@
     if (isModClick(e) && e.target.closest(".desc-text")) {
       e.preventDefault();
     }
+  });
+
+  function isTypingTarget(el) {
+    if (!el) return false;
+    if (el.isContentEditable) return true;
+    const tag = el.tagName;
+    return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+  }
+
+  function setSpacePanArmed(armed) {
+    spacePanArmed = armed;
+    htaViewport?.classList.toggle("is-space-pan", armed);
+    if (!armed && isPanning) endPan();
+  }
+
+  function beginPan(clientX, clientY) {
+    if (!htaViewport) return;
+    isPanning = true;
+    panLast = { x: clientX, y: clientY };
+    htaViewport.classList.add("is-panning");
+  }
+
+  function movePan(clientX, clientY) {
+    if (!isPanning || !htaViewport) return;
+    const dx = clientX - panLast.x;
+    const dy = clientY - panLast.y;
+    panLast = { x: clientX, y: clientY };
+    htaViewport.scrollLeft -= dx;
+    htaViewport.scrollTop -= dy;
+  }
+
+  function endPan() {
+    if (!isPanning) return;
+    isPanning = false;
+    htaViewport?.classList.remove("is-panning");
+    ignoreClickAfterPan = true;
+  }
+
+  htaViewport?.addEventListener(
+    "click",
+    (e) => {
+      if (!ignoreClickAfterPan) return;
+      ignoreClickAfterPan = false;
+      e.preventDefault();
+      e.stopPropagation();
+    },
+    true
+  );
+
+  htaViewport?.addEventListener("mousedown", (e) => {
+    if (!spacePanArmed || e.button !== 0) return;
+    e.preventDefault();
+    beginPan(e.clientX, e.clientY);
+  });
+
+  window.addEventListener("mousemove", (e) => {
+    if (isPanning) {
+      e.preventDefault();
+      movePan(e.clientX, e.clientY);
+    }
+  });
+
+  window.addEventListener("mouseup", () => {
+    endPan();
+    endSplitResize();
+  });
+
+  function clampSplitPct(pct) {
+    return Math.min(SPLIT_MAX_PCT, Math.max(SPLIT_MIN_PCT, pct));
+  }
+
+  function applySplitPct(pct) {
+    const value = `${clampSplitPct(pct)}%`;
+    document.documentElement.style.setProperty("--hta-split", value);
+    if (htaPanel) {
+      htaPanel.style.flex = `0 0 ${value}`;
+      htaPanel.style.width = value;
+    }
+  }
+
+  function loadSplitPct() {
+    const raw = localStorage.getItem(SPLIT_STORAGE_KEY);
+    const pct = raw != null ? Number(raw) : SPLIT_DEFAULT_PCT;
+    applySplitPct(Number.isFinite(pct) ? pct : SPLIT_DEFAULT_PCT);
+  }
+
+  function saveSplitPct(pct) {
+    localStorage.setItem(SPLIT_STORAGE_KEY, String(clampSplitPct(pct)));
+  }
+
+  function beginSplitResize() {
+    if (!mainContent || !htaPanel) return;
+    isSplitResizing = true;
+    document.body.classList.add("is-split-resizing");
+    splitResizer?.classList.add("is-dragging");
+  }
+
+  function moveSplitResize(clientX) {
+    if (!isSplitResizing || !mainContent) return;
+    const rect = mainContent.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const pct = ((clientX - rect.left) / rect.width) * 100;
+    applySplitPct(pct);
+  }
+
+  function endSplitResize() {
+    if (!isSplitResizing) return;
+    isSplitResizing = false;
+    document.body.classList.remove("is-split-resizing");
+    splitResizer?.classList.remove("is-dragging");
+    const raw = getComputedStyle(document.documentElement)
+      .getPropertyValue("--hta-split")
+      .trim()
+      .replace("%", "");
+    const pct = Number(raw);
+    if (Number.isFinite(pct)) saveSplitPct(pct);
+    buildConnectors();
+  }
+
+  splitResizer?.addEventListener("mousedown", (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    beginSplitResize();
+    moveSplitResize(e.clientX);
+  });
+
+  window.addEventListener("mousemove", (e) => {
+    if (isSplitResizing) {
+      e.preventDefault();
+      moveSplitResize(e.clientX);
+    }
+  });
+
+  splitResizer?.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    const raw = getComputedStyle(document.documentElement)
+      .getPropertyValue("--hta-split")
+      .trim()
+      .replace("%", "");
+    let pct = Number(raw);
+    if (!Number.isFinite(pct)) pct = SPLIT_DEFAULT_PCT;
+    pct += e.key === "ArrowLeft" ? -2 : 2;
+    applySplitPct(pct);
+    saveSplitPct(pct);
+    buildConnectors();
   });
 
   textInput?.addEventListener("keydown", (e) => {
@@ -1511,6 +1946,20 @@
 
   document.addEventListener("keydown", (e) => {
     const active = document.activeElement;
+    const mod = e.metaKey || e.ctrlKey;
+
+    // Undo / redo (Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z, Cmd/Ctrl+Y)
+    if (mod && !e.altKey && e.key.toLowerCase() === "z") {
+      e.preventDefault();
+      if (e.shiftKey) redo();
+      else undo();
+      return;
+    }
+    if (mod && !e.altKey && e.key.toLowerCase() === "y") {
+      e.preventDefault();
+      redo();
+      return;
+    }
 
     if (active?.isContentEditable && hierarchyEl?.contains(active)) {
       if (e.key === "Escape") {
@@ -1545,18 +1994,33 @@
 
     if (active === textInput) return;
 
+    // While typing in TTA cells / inputs, disable app shortcuts (C/S/D, arrows, Del, Space…)
+    if (isTypingTarget(active)) return;
+
+    // Figma/Penpot-style: hold Space for hand tool, drag to pan HTA
+    if (e.code === "Space" || e.key === " ") {
+      e.preventDefault();
+      if (!e.repeat) setSpacePanArmed(true);
+      return;
+    }
+
     if (e.key === "Enter" && !e.shiftKey) {
       if (handleEnterOnComponent(e)) return;
     }
 
     if (e.key === "ArrowUp" || e.key === "ArrowDown") {
       if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      if (ui.selectedTaskId) {
+        if (handleSelectedArrow(e.key)) e.preventDefault();
+        return;
+      }
       e.preventDefault();
       navigateTasks(e.key);
       return;
     }
 
     if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      if (active === splitResizer) return;
       if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
       if (handleHorizontalArrow(e.key)) {
         e.preventDefault();
@@ -1588,6 +2052,18 @@
     }
   });
 
+  document.addEventListener("keyup", (e) => {
+    if (e.code === "Space" || e.key === " ") {
+      setSpacePanArmed(false);
+    }
+  });
+
+  window.addEventListener("blur", () => {
+    setSpacePanArmed(false);
+    endPan();
+    endSplitResize();
+  });
+
   document.addEventListener("click", (e) => {
     if (
       columnPicker?.classList.contains("open") &&
@@ -1605,11 +2081,14 @@
 
   // ---------- Boot ----------
 
+  loadSplitPct();
   state = hydrateFromDom();
+  ensureTtaCoversAllTasks(state);
   setTheme(state.meta.theme);
   if (textInput) resetHistory(textInput.value ?? "");
   render(state);
   updateToolbarEnabled();
+  resetStateHistory();
 
   // Expose for smoke tests / debugging
   window.HTAEditor = {
